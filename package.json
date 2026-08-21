@@ -12,6 +12,7 @@
   },
   "files": [
     "lib/**/*.js",
+    "lib/**/*.map",
     "src/**/*.js",
     "scripts/build.mjs",
     "cordis.patch.yml",
