@@ -33,7 +33,7 @@ dsh plugin --profile web add github:liznee/dsh-speech-input
 仓库已提交预构建的 `lib/`，Git 安装不会执行构建脚本，也不需要在
 `pnpm-workspace.yaml` 中授权 `allowBuilds`。安装或升级后重启 `dsh web`。
 
-未来发布到 npm 后也可使用：
+也可以从 npm Registry 安装：
 
 ```sh
 dsh plugin --profile web add dsh-speech-input
@@ -77,7 +77,7 @@ dsh plugin --profile web add github:liznee/dsh-speech-input
 
 Prebuilt `lib/` artifacts are committed, so Git installation does not execute a build script or require a pnpm `allowBuilds` grant. Restart `dsh web` after installing or updating.
 
-After a future npm release, this also works:
+You can also install it from the npm Registry:
 
 ```sh
 dsh plugin --profile web add dsh-speech-input
@@ -103,4 +103,5 @@ MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 ## Project links
 
 - Source and issues: https://github.com/liznee/dsh-speech-input
+- npm package: https://www.npmjs.com/package/dsh-speech-input
 - DeepSeek Harness plugin packaging guide: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md
