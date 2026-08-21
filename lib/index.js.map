@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/index.js"],
+  "sourcesContent": ["/** Host half: the browser bundle owns all voice-input behavior. */\nexport const name = 'dsh-speech-input'\n\nexport function apply() {}\n"],
+  "mappings": ";AACO,IAAM,OAAO;AAEb,SAAS,QAAQ;AAAC;",
+  "names": []
+}

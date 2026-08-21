@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/invariant.js"],
+  "sourcesContent": ["const PACKAGE_NAME = 'dsh-speech-input'\n\nexport const name = 'dsh-speech-input-invariant'\nexport const inject = ['invariants']\n\nexport function apply(ctx) {\n  return Promise.resolve(ctx.invariants.register(PACKAGE_NAME, () => {}))\n}\n"],
+  "mappings": ";AAAA,IAAM,eAAe;AAEd,IAAM,OAAO;AACb,IAAM,SAAS,CAAC,YAAY;AAE5B,SAAS,MAAM,KAAK;AACzB,SAAO,QAAQ,QAAQ,IAAI,WAAW,SAAS,cAAc,MAAM;AAAA,EAAC,CAAC,CAAC;AACxE;",
+  "names": []
+}
