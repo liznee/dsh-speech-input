@@ -1,0 +1,7 @@
+dsh-speech-input is an independent implementation for DeepSeek Harness.
+
+Prior-art review included the MIT-licensed dsh-mic-input project by QT-Chen
+(https://github.com/QT-Chen/dsh-mic-input). This project was implemented from
+new source against the public Harness slot and input-action contracts; the
+acknowledgement is retained because the prior project informed product-level
+behavior such as a composer microphone and continuous browser recognition.
