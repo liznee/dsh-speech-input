@@ -99,15 +99,15 @@ const STYLES = `
   display: inline-flex;
   flex: 1 1 auto;
   gap: 0;
-  height: 24px;
+  height: 30px;
   justify-content: space-between;
   min-width: 72px;
-  padding: 0 3px 5px;
+  padding: 0 3px;
   position: relative;
 }
 .dsh-speech-input-waveform::after {
   background: currentColor;
-  bottom: 3px;
+  bottom: 1px;
   content: '';
   height: 1px;
   left: 3px;
@@ -329,7 +329,7 @@ export function SpeechInputButton({
           'aria-hidden': true,
           key: index,
           style: {
-            height: `${2 + Math.round(level * 8)}px`,
+            height: `${2 + Math.round(level * 28)}px`,
             opacity: 0.4 + level * 0.6,
           },
         }))),
