@@ -58,9 +58,10 @@ const STYLES = `
   opacity: .45;
 }
 .dsh-speech-input-button[data-active='true'] {
-  border-color: var(--dsw-alias-state-error-primary);
-  color: var(--dsw-alias-state-error-primary);
-  animation: dsh-speech-input-pulse 1.2s ease-in-out infinite;
+  background: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-label-primary);
+  border-radius: 999px;
+  color: var(--dsw-alias-bg-layer-1);
 }
 .dsh-speech-input-button[data-error='true'] {
   color: var(--dsw-alias-state-warn-primary);
@@ -74,13 +75,8 @@ const STYLES = `
   white-space: nowrap;
   width: 1px;
 }
-@keyframes dsh-speech-input-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 28%, transparent); }
-  50% { box-shadow: 0 0 0 6px transparent; }
-}
 @media (prefers-reduced-motion: reduce) {
   .dsh-speech-input-button { transition: none; }
-  .dsh-speech-input-button[data-active='true'] { animation: none; }
 }
 `
 
@@ -128,6 +124,23 @@ function MicrophoneIcon() {
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
     strokeWidth: 2,
+  }))
+}
+
+function StopIcon() {
+  return React.createElement('svg', {
+    'aria-hidden': true,
+    fill: 'none',
+    height: 16,
+    viewBox: '0 0 24 24',
+    width: 16,
+  }, React.createElement('rect', {
+    fill: 'currentColor',
+    height: 9,
+    rx: 1.5,
+    width: 9,
+    x: 7.5,
+    y: 7.5,
   }))
 }
 
@@ -192,7 +205,7 @@ export function SpeechInputButton({ input, inputActions, t }) {
       onClick: toggle,
       title: label,
       type: 'button',
-    }, React.createElement(MicrophoneIcon)),
+    }, React.createElement(active ? StopIcon : MicrophoneIcon)),
     React.createElement('span', {
       'aria-live': 'polite',
       className: 'dsh-speech-input-status',

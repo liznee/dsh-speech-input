@@ -209,22 +209,17 @@ export class VoiceRecognitionController {
         this.silentEnds += 1
       }
 
-      const maximum = this.options.maxSilentRestarts ?? 6
-      if (this.silentEnds >= maximum) {
-        this.active = false
-        this.generation += 1
-        this.finishDraft()
-        this.options.onState({ phase: 'idle' })
-        return
-      }
-
       const restartGeneration = this.generation
-      const schedule = this.options.schedule ?? (callback => setTimeout(callback, 180))
+      // Browser engines routinely end one recognition session after silence.
+      // Keep reopening sessions until the user explicitly stops; a capped
+      // backoff prevents a silent engine from spinning in a tight loop.
+      const delay = Math.min(180 + this.silentEnds * 120, 1_500)
+      const schedule = this.options.schedule ?? ((callback, wait) => setTimeout(callback, wait))
       schedule(() => {
         if (this.active && !this.destroyed && restartGeneration === this.generation) {
           this.openRecognition(restartGeneration)
         }
-      })
+      }, delay)
     }
 
     try {
