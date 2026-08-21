@@ -109,7 +109,7 @@ describe('SpeechInputButton', () => {
 
     act(() => { meter.emit(0.8) })
     assert.equal(waveform(view).props['data-level'], '0.800')
-    assert.notEqual(waveform(view).findAllByType('i').at(-1).props.style.height, '2px')
+    assert.equal(waveform(view).findAllByType('i').at(-1).props.style.height, '8px')
 
     act(() => { FakeRecognition.latest.result('查天气') })
     assert.equal(latestDraft, '请帮我查天气')

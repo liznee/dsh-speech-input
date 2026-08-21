@@ -66,12 +66,15 @@ describe('MicrophoneLevelMeter', () => {
       harness.samples[index] = index % 2 === 0 ? 32 : 224
     }
     harness.tick(80)
+    assert.equal(harness.levels.length, 1)
+    harness.tick(120)
+    assert.equal(harness.levels.length, 2)
     assert.ok(harness.levels.at(-1) > 0.4)
     assert.ok(harness.levels.at(-1) <= 1)
 
     harness.meter.stop()
     assert.deepEqual(harness.state(), {
-      cancelledFrame: 3,
+      cancelledFrame: 4,
       contextClosed: true,
       disconnected: true,
       trackStopped: true,
