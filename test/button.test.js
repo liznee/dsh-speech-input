@@ -63,6 +63,7 @@ describe('SpeechInputButton', () => {
     let latestDraft = ''
     let submitCalls = 0
     const composerBlocks = []
+    let meter
 
     function Harness() {
       const [draft, setDraft] = React.useState('请帮我')
@@ -72,6 +73,16 @@ describe('SpeechInputButton', () => {
         inputActions: {
           setDraft,
           submit: () => { submitCalls += 1 },
+        },
+        createMeter: onLevel => {
+          meter = {
+            startCalls: 0,
+            stopCalls: 0,
+            emit: onLevel,
+            start() { this.startCalls += 1 },
+            stop() { this.stopCalls += 1 },
+          }
+          return meter
         },
         setComposerBlocked: block => { composerBlocks.push(block) },
         t: translate,
@@ -88,15 +99,17 @@ describe('SpeechInputButton', () => {
     assert.equal(button.props['aria-pressed'], true)
     assert.equal(view.root.findAllByType('rect').length, 1)
     assert.equal(buttonByLabel(view, 'cancel') !== undefined, true)
+    assert.match(buttonByLabel(view, 'cancel').props.className, /dsh-speech-input-cancel/)
     assert.deepEqual(composerBlocks.at(-1), { reason: 'listening-block' })
-    assert.equal(waveform(view).props['data-speaking'], 'false')
+    assert.equal(meter.startCalls, 1)
+    assert.equal(waveform(view).props['data-level'], '0.000')
+    assert.equal(waveform(view).findAllByType('i').length, 24)
     assert.equal(typeof FakeRecognition.latest.lang, 'string')
     assert.notEqual(FakeRecognition.latest.lang, '')
 
-    act(() => { FakeRecognition.latest.speechStart() })
-    assert.equal(waveform(view).props['data-speaking'], 'true')
-    act(() => { FakeRecognition.latest.speechEnd() })
-    assert.equal(waveform(view).props['data-speaking'], 'false')
+    act(() => { meter.emit(0.8) })
+    assert.equal(waveform(view).props['data-level'], '0.800')
+    assert.notEqual(waveform(view).findAllByType('i').at(-1).props.style.height, '2px')
 
     act(() => { FakeRecognition.latest.result('查天气') })
     assert.equal(latestDraft, '请帮我查天气')
@@ -104,6 +117,7 @@ describe('SpeechInputButton', () => {
     act(() => { buttonByLabel(view, 'stop').props.onClick() })
     assert.equal(latestDraft, '请帮我查天气。')
     assert.equal(FakeRecognition.latest.stopCalls, 1)
+    assert.equal(meter.stopCalls, 1)
     assert.equal(submitCalls, 0)
     assert.equal(composerBlocks.at(-1), undefined)
 
