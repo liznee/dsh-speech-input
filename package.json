@@ -1,0 +1,54 @@
+{
+  "name": "dsh-speech-input",
+  "version": "0.1.0",
+  "description": "A microphone button for DeepSeek Harness that writes browser speech recognition into the composer draft.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepare": "npm run build",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "pack:check": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "microphone",
+    "speech-to-text",
+    "voice-input",
+    "web-speech-api"
+  ],
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
