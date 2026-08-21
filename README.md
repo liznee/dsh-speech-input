@@ -24,13 +24,20 @@
 
 ### 安装
 
-发布到 npm 后：
+直接从 GitHub 安装到 Harness Web profile：
+
+```sh
+dsh plugin --profile web add github:liznee/dsh-speech-input
+```
+
+仓库已提交预构建的 `lib/`，Git 安装不会执行构建脚本，也不需要在
+`pnpm-workspace.yaml` 中授权 `allowBuilds`。安装或升级后重启 `dsh web`。
+
+未来发布到 npm 后也可使用：
 
 ```sh
 dsh plugin --profile web add dsh-speech-input
 ```
-
-从 GitHub 安装时，pnpm 需要获准运行 `prepare` 构建脚本；按 Harness 提示把包加入该 profile 的 `pnpm-workspace.yaml` `allowBuilds`，再重试安装。安装或升级后重启 `dsh web`。
 
 本地 tarball：
 
@@ -62,7 +69,15 @@ dsh plugin --profile web add ./dsh-speech-input-0.1.0.tgz
 
 It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows a gray circular cancel control, a full-width 24-segment meter driven by locally measured microphone RMS, and a square stop control; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition and local metering tracks on teardown, and includes reduced-motion and screen-reader behavior.
 
-Install after the package is published:
+Install directly from GitHub:
+
+```sh
+dsh plugin --profile web add github:liznee/dsh-speech-input
+```
+
+Prebuilt `lib/` artifacts are committed, so Git installation does not execute a build script or require a pnpm `allowBuilds` grant. Restart `dsh web` after installing or updating.
+
+After a future npm release, this also works:
 
 ```sh
 dsh plugin --profile web add dsh-speech-input
@@ -84,3 +99,8 @@ Node.js 20 or newer is required for development. The built client is emitted in 
 ## License
 
 MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+## Project links
+
+- Source and issues: https://github.com/liznee/dsh-speech-input
+- DeepSeek Harness plugin packaging guide: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md
