@@ -6,11 +6,14 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./invariant": "./lib/invariant.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/**/*.js",
+    "src/**/*.js",
+    "scripts/build.mjs",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
@@ -32,6 +35,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "npm run build",
+    "pretest": "npm run build",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage",
     "pack:check": "npm pack --dry-run"
@@ -49,6 +53,8 @@
     "web-speech-api"
   ],
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "react": "^18.2.0",
+    "react-test-renderer": "^18.2.0"
   }
 }
