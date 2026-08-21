@@ -177,4 +177,26 @@ describe('VoiceRecognitionController', () => {
     controller.stop()
     assert.equal(phases.at(-1), 'idle')
   })
+
+  it('cancels only the current voice transcript and aborts recognition', () => {
+    let draft = '已有草稿'
+    const recognition = new FakeRecognition()
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: () => {},
+      language: () => 'zh-CN',
+      punctuation: () => 'keep',
+    })
+
+    controller.start()
+    recognition.result([speechResult('语音内容')])
+    assert.equal(draft, '已有草稿语音内容')
+    draft += '手工追加'
+
+    controller.cancel()
+    assert.equal(draft, '已有草稿手工追加')
+    assert.equal(recognition.abortCalls, 1)
+  })
 })

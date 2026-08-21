@@ -37,9 +37,20 @@ class FakeRecognition {
   error(error) {
     this.onerror?.({ error })
   }
+
+  speechStart() {
+    this.onspeechstart?.()
+  }
+
+  speechEnd() {
+    this.onspeechend?.()
+  }
 }
 
 const translate = key => key
+const buttonByLabel = (view, label) => view.root.findAllByType('button')
+  .find(button => button.props['aria-label'] === label)
+const waveform = view => view.root.find(node => node.props.className === 'dsh-speech-input-waveform')
 
 afterEach(() => {
   delete globalThis.window
@@ -51,6 +62,7 @@ describe('SpeechInputButton', () => {
     globalThis.window = { SpeechRecognition: FakeRecognition }
     let latestDraft = ''
     let submitCalls = 0
+    const composerBlocks = []
 
     function Harness() {
       const [draft, setDraft] = React.useState('请帮我')
@@ -61,6 +73,7 @@ describe('SpeechInputButton', () => {
           setDraft,
           submit: () => { submitCalls += 1 },
         },
+        setComposerBlocked: block => { composerBlocks.push(block) },
         t: translate,
       })
     }
@@ -71,19 +84,28 @@ describe('SpeechInputButton', () => {
     assert.equal(button.props['aria-label'], 'start')
 
     act(() => { button.props.onClick() })
-    button = view.root.findByType('button')
+    button = buttonByLabel(view, 'stop')
     assert.equal(button.props['aria-pressed'], true)
     assert.equal(view.root.findAllByType('rect').length, 1)
+    assert.equal(buttonByLabel(view, 'cancel') !== undefined, true)
+    assert.deepEqual(composerBlocks.at(-1), { reason: 'listening-block' })
+    assert.equal(waveform(view).props['data-speaking'], 'false')
     assert.equal(typeof FakeRecognition.latest.lang, 'string')
     assert.notEqual(FakeRecognition.latest.lang, '')
+
+    act(() => { FakeRecognition.latest.speechStart() })
+    assert.equal(waveform(view).props['data-speaking'], 'true')
+    act(() => { FakeRecognition.latest.speechEnd() })
+    assert.equal(waveform(view).props['data-speaking'], 'false')
 
     act(() => { FakeRecognition.latest.result('查天气') })
     assert.equal(latestDraft, '请帮我查天气')
 
-    act(() => { view.root.findByType('button').props.onClick() })
+    act(() => { buttonByLabel(view, 'stop').props.onClick() })
     assert.equal(latestDraft, '请帮我查天气。')
     assert.equal(FakeRecognition.latest.stopCalls, 1)
     assert.equal(submitCalls, 0)
+    assert.equal(composerBlocks.at(-1), undefined)
 
     act(() => { view.unmount() })
   })
@@ -93,6 +115,7 @@ describe('SpeechInputButton', () => {
     const props = {
       input: { draft: '', phase: 'plain' },
       inputActions: { setDraft: () => {} },
+      setComposerBlocked: () => {},
       t: translate,
     }
     let view
@@ -116,6 +139,7 @@ describe('SpeechInputButton', () => {
       view = TestRenderer.create(React.createElement(SpeechInputButton, {
         input: { draft: '', phase: 'plain' },
         inputActions: { setDraft: () => {} },
+        setComposerBlocked: () => {},
         t: translate,
       }))
     })
@@ -128,11 +152,39 @@ describe('SpeechInputButton', () => {
       view = TestRenderer.create(React.createElement(SpeechInputButton, {
         input: { draft: '', phase: 'submitting' },
         inputActions: { setDraft: () => {} },
+        setComposerBlocked: () => {},
         t: translate,
       }))
     })
     assert.equal(view.root.findByType('button').props.disabled, true)
     assert.equal(view.root.findByType('button').props.title, 'busy')
+    act(() => { view.unmount() })
+  })
+
+  it('cancels the current dictation from the visible X control', () => {
+    globalThis.window = { SpeechRecognition: FakeRecognition }
+    let latestDraft = ''
+
+    function Harness() {
+      const [draft, setDraft] = React.useState('原文')
+      latestDraft = draft
+      return React.createElement(SpeechInputButton, {
+        input: { draft, phase: 'plain' },
+        inputActions: { setDraft },
+        setComposerBlocked: () => {},
+        t: translate,
+      })
+    }
+
+    let view
+    act(() => { view = TestRenderer.create(React.createElement(Harness)) })
+    act(() => { view.root.findByType('button').props.onClick() })
+    act(() => { FakeRecognition.latest.result('语音') })
+    assert.equal(latestDraft, '原文语音')
+
+    act(() => { buttonByLabel(view, 'cancel').props.onClick() })
+    assert.equal(latestDraft, '原文')
+    assert.equal(FakeRecognition.latest.abortCalls, 1)
     act(() => { view.unmount() })
   })
 })

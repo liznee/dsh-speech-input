@@ -29,6 +29,6 @@ describe('published bundle', () => {
     assert.equal(registration.id, 'dsh-speech-input')
     const client = registration.factory(require)
     assert.equal(typeof client.apply, 'function')
-    assert.deepEqual([...client.inject], ['slots', 'locale'])
+    assert.deepEqual([...client.inject], ['slots', 'locale', 'conversation'])
   })
 })

@@ -4,13 +4,19 @@ import { apply, en, zh } from '../src/client/index.js'
 
 describe('client plugin registration', () => {
   it('registers localized copy and one microphone in the official composer slot', () => {
-    const calls = { dictionaries: null, slot: null }
+    const calls = { dictionaries: null, slot: null, blocks: [] }
     const ctx = {
       effect(install) { return install() },
       locale: {
         register(namespace, dictionaries) {
           calls.dictionaries = { namespace, dictionaries }
           return () => {}
+        },
+      },
+      conversation: {
+        blocks: {
+          set(sessionId, block) { calls.blocks.push({ sessionId, block }) },
+          storeFor() { return { getSnapshot: () => undefined } },
         },
       },
       slots: {
@@ -34,6 +40,7 @@ describe('client plugin registration', () => {
     assert.equal(calls.slot.definition.name, 'conversation.input.right')
     assert.equal(calls.slot.definition.id, 'speech-input-microphone')
     assert.equal(calls.slot.definition.locale, 'speech-input')
+    assert.equal(typeof calls.slot.definition.inject, 'function')
     assert.equal(typeof calls.slot.component, 'function')
   })
 
