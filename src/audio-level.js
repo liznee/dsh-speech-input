@@ -90,11 +90,11 @@ export class MicrophoneLevelMeter {
     }
     const rms = Math.sqrt(sumSquares / this.samples.length)
     const measured = clampLevel((rms - 0.012) * 2.2)
-    const smoothing = measured > this.level ? 0.72 : 0.2
+    const smoothing = measured > this.level ? 0.52 : 0.12
     this.level = clampLevel(this.level + (measured - this.level) * smoothing)
     if (this.level < 0.008) this.level = 0
 
-    if (this.lastEmission === null || timestamp - this.lastEmission >= 50) {
+    if (this.lastEmission === null || timestamp - this.lastEmission >= 100) {
       this.lastEmission = timestamp
       this.options.onLevel(this.level)
     }

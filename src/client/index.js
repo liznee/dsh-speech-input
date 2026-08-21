@@ -121,7 +121,7 @@ const STYLES = `
   display: block;
   flex: none;
   min-height: 2px;
-  transition: height 50ms linear, opacity 50ms linear;
+  transition: height 140ms ease-out, opacity 140ms linear;
   width: 2px;
 }
 .dsh-speech-input-status {
@@ -329,7 +329,7 @@ export function SpeechInputButton({
           'aria-hidden': true,
           key: index,
           style: {
-            height: `${2 + Math.round(level * 14)}px`,
+            height: `${2 + Math.round(level * 8)}px`,
             opacity: 0.4 + level * 0.6,
           },
         }))),
