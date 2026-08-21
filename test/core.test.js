@@ -146,4 +146,35 @@ describe('VoiceRecognitionController', () => {
     controller.destroy()
     assert.equal(recognition.abortCalls, 1)
   })
+
+  it('restarts after any number of silent ends until the user stops it', () => {
+    const recognitions = []
+    const scheduled = []
+    const phases = []
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => {
+        const recognition = new FakeRecognition()
+        recognitions.push(recognition)
+        return recognition
+      },
+      getDraft: () => '',
+      setDraft: () => {},
+      onState: state => { phases.push(state.phase) },
+      language: () => 'zh-CN',
+      punctuation: () => 'keep',
+      schedule: fn => { scheduled.push(fn) },
+    })
+
+    controller.start()
+    for (let count = 0; count < 8; count += 1) {
+      recognitions.at(-1).end()
+      assert.equal(scheduled.length, 1)
+      scheduled.shift()()
+    }
+
+    assert.equal(recognitions.length, 9)
+    assert.equal(phases.includes('idle'), false)
+    controller.stop()
+    assert.equal(phases.at(-1), 'idle')
+  })
 })

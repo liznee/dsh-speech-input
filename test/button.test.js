@@ -73,6 +73,7 @@ describe('SpeechInputButton', () => {
     act(() => { button.props.onClick() })
     button = view.root.findByType('button')
     assert.equal(button.props['aria-pressed'], true)
+    assert.equal(view.root.findAllByType('rect').length, 1)
     assert.equal(typeof FakeRecognition.latest.lang, 'string')
     assert.notEqual(FakeRecognition.latest.lang, '')
 
