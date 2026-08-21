@@ -1,7 +1,13 @@
 import React from 'react'
+import { createBrowserMicrophoneLevelMeter } from '../audio-level.js'
 import { VoiceRecognitionController } from '../core.js'
 
 const NS = 'speech-input'
+const WAVEFORM_SEGMENTS = 24
+
+function emptyWaveform() {
+  return Array.from({ length: WAVEFORM_SEGMENTS }, () => 0)
+}
 
 export const zh = {
   start: '语音输入（点击开始）',
@@ -72,6 +78,14 @@ const STYLES = `
 .dsh-speech-input-button[data-error='true'] {
   color: var(--dsw-alias-state-warn-primary);
 }
+.dsh-speech-input-cancel {
+  background: rgba(127, 127, 127, .20);
+  border-color: transparent;
+  border-radius: 999px;
+}
+.dsh-speech-input-cancel:hover:not(:disabled) {
+  background: rgba(127, 127, 127, .30);
+}
 .dsh-speech-input-active {
   align-items: center;
   display: inline-flex;
@@ -84,9 +98,9 @@ const STYLES = `
   color: var(--dsw-alias-label-secondary);
   display: inline-flex;
   flex: 1 1 auto;
-  gap: 2px;
+  gap: 0;
   height: 24px;
-  justify-content: center;
+  justify-content: space-between;
   min-width: 72px;
   padding: 0 3px 5px;
   position: relative;
@@ -105,20 +119,10 @@ const STYLES = `
   background: currentColor;
   border-radius: 999px;
   display: block;
-  height: 4px;
-  transform-origin: center;
+  flex: none;
+  min-height: 2px;
+  transition: height 50ms linear, opacity 50ms linear;
   width: 2px;
-}
-.dsh-speech-input-waveform[data-speaking='true'] > i {
-  animation: dsh-speech-wave 620ms ease-in-out infinite alternate;
-}
-.dsh-speech-input-waveform > i:nth-child(2) { animation-delay: -420ms; }
-.dsh-speech-input-waveform > i:nth-child(3) { animation-delay: -240ms; }
-.dsh-speech-input-waveform > i:nth-child(4) { animation-delay: -520ms; }
-.dsh-speech-input-waveform > i:nth-child(5) { animation-delay: -160ms; }
-@keyframes dsh-speech-wave {
-  0% { height: 4px; opacity: .65; }
-  100% { height: 16px; opacity: 1; }
 }
 .dsh-speech-input-status {
   clip: rect(0 0 0 0);
@@ -131,12 +135,7 @@ const STYLES = `
 }
 @media (prefers-reduced-motion: reduce) {
   .dsh-speech-input-button { transition: none; }
-  .dsh-speech-input-waveform[data-speaking='true'] > i { animation: none; }
-  .dsh-speech-input-waveform[data-speaking='true'] > i:nth-child(1),
-  .dsh-speech-input-waveform[data-speaking='true'] > i:nth-child(5) { height: 7px; }
-  .dsh-speech-input-waveform[data-speaking='true'] > i:nth-child(2),
-  .dsh-speech-input-waveform[data-speaking='true'] > i:nth-child(4) { height: 12px; }
-  .dsh-speech-input-waveform[data-speaking='true'] > i:nth-child(3) { height: 16px; }
+  .dsh-speech-input-waveform > i { transition: none; }
 }
 `
 
@@ -219,13 +218,33 @@ function CancelIcon() {
   }))
 }
 
-export function SpeechInputButton({ input, inputActions, setComposerBlocked, t }) {
+export function SpeechInputButton({
+  createMeter = createBrowserMicrophoneLevelMeter,
+  input,
+  inputActions,
+  setComposerBlocked,
+  t,
+}) {
   const live = React.useRef({ input, inputActions })
   live.current = { input, inputActions }
+  const mounted = React.useRef(true)
   const [voice, setVoice] = React.useState({ phase: 'idle' })
+  const [waveformLevels, setWaveformLevels] = React.useState(emptyWaveform)
   const controller = React.useRef(null)
+  const levelMeter = React.useRef(null)
   const supported = speechConstructor() !== null
   const busy = input?.phase !== 'plain'
+
+  const recordLevel = React.useCallback(value => {
+    if (!mounted.current) return
+    const level = Math.max(0, Math.min(1, Number(value) || 0))
+    setWaveformLevels(previous => [...previous.slice(1), level])
+  }, [])
+
+  const ensureMeter = React.useCallback(() => {
+    if (levelMeter.current === null) levelMeter.current = createMeter(recordLevel) ?? false
+    return levelMeter.current === false ? null : levelMeter.current
+  }, [createMeter, recordLevel])
 
   const ensureController = React.useCallback(() => {
     if (controller.current !== null) return controller.current
@@ -246,8 +265,11 @@ export function SpeechInputButton({ input, inputActions, setComposerBlocked, t }
   }, [])
 
   React.useEffect(() => () => {
+    mounted.current = false
     controller.current?.destroy()
     controller.current = null
+    if (levelMeter.current !== false) levelMeter.current?.stop()
+    levelMeter.current = null
   }, [])
 
   React.useEffect(() => {
@@ -255,7 +277,6 @@ export function SpeechInputButton({ input, inputActions, setComposerBlocked, t }
   }, [busy])
 
   const active = voice.phase === 'starting' || voice.phase === 'listening'
-  const speaking = voice.phase === 'listening' && voice.speaking === true
   const error = voice.phase === 'error'
   let label = t('start')
   if (!supported) label = t('unsupported')
@@ -270,10 +291,17 @@ export function SpeechInputButton({ input, inputActions, setComposerBlocked, t }
     return () => { setComposerBlocked(undefined) }
   }, [active, setComposerBlocked, t])
 
+  React.useEffect(() => {
+    if (active || levelMeter.current === null) return
+    if (levelMeter.current !== false) levelMeter.current.stop()
+    levelMeter.current = null
+    setWaveformLevels(emptyWaveform())
+  }, [active])
+
   const toggle = () => {
     const instance = ensureController()
     if (active) instance.stop()
-    else instance.start()
+    else if (instance.start()) void ensureMeter()?.start()
   }
 
   const status = React.createElement('span', {
@@ -287,7 +315,7 @@ export function SpeechInputButton({ input, inputActions, setComposerBlocked, t }
       React.createElement('span', { className: 'dsh-speech-input-active' },
         React.createElement('button', {
           'aria-label': t('cancel'),
-          className: 'dsh-speech-input-button',
+          className: 'dsh-speech-input-button dsh-speech-input-cancel',
           onClick: () => { ensureController().cancel() },
           title: t('cancel'),
           type: 'button',
@@ -295,11 +323,15 @@ export function SpeechInputButton({ input, inputActions, setComposerBlocked, t }
         React.createElement('span', {
           'aria-label': t('waveform'),
           className: 'dsh-speech-input-waveform',
-          'data-speaking': speaking ? 'true' : 'false',
+          'data-level': waveformLevels.at(-1).toFixed(3),
           role: 'img',
-        }, ...Array.from({ length: 5 }, (_, index) => React.createElement('i', {
+        }, ...waveformLevels.map((level, index) => React.createElement('i', {
           'aria-hidden': true,
           key: index,
+          style: {
+            height: `${2 + Math.round(level * 14)}px`,
+            opacity: 0.4 + level * 0.6,
+          },
         }))),
         React.createElement('button', {
           'aria-label': t('stop'),

@@ -13,7 +13,8 @@
 - 中间识别结果原位更新，不会反复叠加同一句话
 - 听写期间在识别文字后手工补写的内容会保留
 - 无语音、停顿或浏览器结束单次识别时会持续自动续听，只有再次点击停止按钮才结束
-- 听写中显示“取消 ×｜随语音起伏的音波和底线｜方块停止”，采用 Codex 风格，不使用红色录音状态
+- 听写中显示“灰色圆形取消 ×｜铺满可用宽度的实时音量条｜方块停止”，采用 Codex 风格，不使用红色录音状态
+- 音量条通过 Web Audio API 在本地计算麦克风 RMS 音量，展示最近 24 个真实音量样本，不使用循环假动画
 - 听写期间 Harness 的发送按钮和 Enter 发送会由官方接口置灰禁用；停止或取消后恢复
 - 点击取消会移除本轮语音产生的全部文字，并保留开始听写前的草稿与可识别的手工追加内容
 - 权限、麦克风或网络硬错误会给出明确提示
@@ -42,7 +43,7 @@ dsh plugin --profile web add ./dsh-speech-input-0.1.0.tgz
 
 ### 隐私
 
-插件本身不保存音频、不写日志，也不把音频发送给 Harness 或 DeepSeek。Web Speech API 的具体处理路径由浏览器决定：Edge/Chrome 通常会把音频交给浏览器厂商的在线语音服务。因此它不是离线识别；若不能接受该数据路径，请不要授权麦克风。
+插件本身不保存音频、不写日志，也不把音频发送给 Harness 或 DeepSeek。为了显示真实音量，插件会额外打开一条本地麦克风流，只连接到 Web Audio `AnalyserNode` 计算 RMS；不会播放、录制或上传该流，停止或取消时会立即关闭音轨。Web Speech API 的识别处理路径仍由浏览器决定：Edge/Chrome 通常会把识别音频交给浏览器厂商的在线语音服务。因此它不是离线识别；若不能接受该数据路径，请不要授权麦克风。
 
 ### 已知限制
 
@@ -59,7 +60,7 @@ dsh plugin --profile web add ./dsh-speech-input-0.1.0.tgz
 
 `dsh-speech-input` adds a native microphone control to the DeepSeek Harness Web composer. Click once to dictate into the current draft and again to stop. It never submits the message automatically.
 
-It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows cancel, voice-reactive waveform, and square stop controls; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition on teardown, and includes reduced-motion and screen-reader behavior.
+It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows a gray circular cancel control, a full-width 24-segment meter driven by locally measured microphone RMS, and a square stop control; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition and local metering tracks on teardown, and includes reduced-motion and screen-reader behavior.
 
 Install after the package is published:
 
