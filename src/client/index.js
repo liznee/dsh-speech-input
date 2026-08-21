@@ -77,17 +77,19 @@ const STYLES = `
   display: inline-flex;
   flex: none;
   gap: 3px;
+  width: min(320px, 42vw);
 }
 .dsh-speech-input-waveform {
   align-items: center;
   color: var(--dsw-alias-label-secondary);
   display: inline-flex;
+  flex: 1 1 auto;
   gap: 2px;
   height: 24px;
   justify-content: center;
+  min-width: 72px;
   padding: 0 3px 5px;
   position: relative;
-  width: 36px;
 }
 .dsh-speech-input-waveform::after {
   background: currentColor;
