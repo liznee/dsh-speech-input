@@ -141,6 +141,22 @@ export class VoiceRecognitionController {
     return true
   }
 
+  cancel() {
+    if (!this.active) return false
+    this.active = false
+    this.generation += 1
+    const recognition = this.recognition
+    this.recognition = null
+    if (recognition !== null) {
+      try { recognition.abort() } catch {}
+    }
+    // Remove only text owned by this recording. The merge routine retains the
+    // original draft and any clearly identifiable manual suffix edits.
+    this.updateDraft('')
+    this.options.onState({ phase: 'idle' })
+    return true
+  }
+
   destroy() {
     if (this.destroyed) return
     this.destroyed = true
@@ -176,7 +192,17 @@ export class VoiceRecognitionController {
     recognition.interimResults = true
     recognition.onstart = () => {
       if (this.active && generation === this.generation) {
-        this.options.onState({ phase: 'listening' })
+        this.options.onState({ phase: 'listening', speaking: false })
+      }
+    }
+    recognition.onspeechstart = () => {
+      if (this.active && generation === this.generation) {
+        this.options.onState({ phase: 'listening', speaking: true })
+      }
+    }
+    recognition.onspeechend = () => {
+      if (this.active && generation === this.generation) {
+        this.options.onState({ phase: 'listening', speaking: false })
       }
     }
     recognition.onresult = event => {
@@ -200,6 +226,8 @@ export class VoiceRecognitionController {
     recognition.onend = () => {
       if (this.recognition === recognition) this.recognition = null
       if (!this.active || this.destroyed || generation !== this.generation) return
+
+      this.options.onState({ phase: 'starting' })
 
       const round = joinSpeech(this.roundFinal, this.roundInterim)
       if (round) {

@@ -13,7 +13,9 @@
 - 中间识别结果原位更新，不会反复叠加同一句话
 - 听写期间在识别文字后手工补写的内容会保留
 - 无语音、停顿或浏览器结束单次识别时会持续自动续听，只有再次点击停止按钮才结束
-- 听写中切换为 Codex 风格的方块停止图标，不使用红色录音状态
+- 听写中显示“取消 ×｜随语音起伏的音波和底线｜方块停止”，采用 Codex 风格，不使用红色录音状态
+- 听写期间 Harness 的发送按钮和 Enter 发送会由官方接口置灰禁用；停止或取消后恢复
+- 点击取消会移除本轮语音产生的全部文字，并保留开始听写前的草稿与可识别的手工追加内容
 - 权限、麦克风或网络硬错误会给出明确提示
 - 页面切换或插件卸载时中止识别并释放麦克风
 - 支持键盘焦点、屏幕阅读器状态播报和减少动态效果偏好
@@ -57,7 +59,7 @@ dsh plugin --profile web add ./dsh-speech-input-0.1.0.tgz
 
 `dsh-speech-input` adds a native microphone control to the DeepSeek Harness Web composer. Click once to dictate into the current draft and again to stop. It never submits the message automatically.
 
-It uses the public `conversation.input.right` slot and `inputActions.setDraft()` API, supports interim-result replacement, preserves common concurrent edits, reports permission and network failures, releases recognition on teardown, and includes reduced-motion and screen-reader behavior.
+It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows cancel, voice-reactive waveform, and square stop controls; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition on teardown, and includes reduced-motion and screen-reader behavior.
 
 Install after the package is published:
 
