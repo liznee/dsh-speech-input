@@ -107,9 +107,9 @@ describe('SpeechInputButton', () => {
     assert.equal(typeof FakeRecognition.latest.lang, 'string')
     assert.notEqual(FakeRecognition.latest.lang, '')
 
-    act(() => { meter.emit(0.8) })
-    assert.equal(waveform(view).props['data-level'], '0.800')
-    assert.equal(waveform(view).findAllByType('i').at(-1).props.style.height, '8px')
+    act(() => { meter.emit(1) })
+    assert.equal(waveform(view).props['data-level'], '1.000')
+    assert.equal(waveform(view).findAllByType('i').at(-1).props.style.height, '30px')
 
     act(() => { FakeRecognition.latest.result('查天气') })
     assert.equal(latestDraft, '请帮我查天气')
