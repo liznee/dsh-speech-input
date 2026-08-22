@@ -1,5 +1,7 @@
 # dsh-speech-input
 
+[![CI](https://github.com/liznee/dsh-speech-input/actions/workflows/ci.yml/badge.svg)](https://github.com/liznee/dsh-speech-input/actions/workflows/ci.yml)
+
 [中文](#中文) | [English](#english)
 
 ## 中文
@@ -24,19 +26,28 @@
 
 ### 安装
 
-直接从 GitHub 安装到 Harness Web profile：
+`v0.1.0` 已在 DeepSeek Harness `0.1.1-rc.1` 上验证。当前 Harness 需要 Node.js `22.19+` 或 `24+`。
+
+从 npm Registry 安装固定版本：
 
 ```sh
-dsh plugin --profile web add github:liznee/dsh-speech-input
+dsh plugin --profile web add dsh-speech-input@0.1.0
+```
+
+也可以安装对应的 GitHub Release：
+
+```sh
+dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.0
 ```
 
 仓库已提交预构建的 `lib/`，Git 安装不会执行构建脚本，也不需要在
-`pnpm-workspace.yaml` 中授权 `allowBuilds`。安装或升级后重启 `dsh web`。
+`pnpm-workspace.yaml` 中授权 `allowBuilds`。安装后运行
+`dsh --profile web --dump-config`，输出中应出现 `# == dsh-speech-input`；随后重启 `dsh web`。
 
-也可以从 npm Registry 安装：
+升级时，将上述安装命令中的 `0.1.0` 替换为准备安装的新版本。卸载命令：
 
 ```sh
-dsh plugin --profile web add dsh-speech-input
+dsh plugin --profile web remove dsh-speech-input
 ```
 
 本地 tarball：
@@ -69,19 +80,19 @@ dsh plugin --profile web add ./dsh-speech-input-0.1.0.tgz
 
 It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows a gray circular cancel control, a full-width 24-segment meter driven by locally measured microphone RMS, and a square stop control; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition and local metering tracks on teardown, and includes reduced-motion and screen-reader behavior.
 
-Install directly from GitHub:
+Install the fixed npm release:
 
 ```sh
-dsh plugin --profile web add github:liznee/dsh-speech-input
+dsh plugin --profile web add dsh-speech-input@0.1.0
 ```
 
-Prebuilt `lib/` artifacts are committed, so Git installation does not execute a build script or require a pnpm `allowBuilds` grant. Restart `dsh web` after installing or updating.
-
-You can also install it from the npm Registry:
+Or install the matching GitHub Release:
 
 ```sh
-dsh plugin --profile web add dsh-speech-input
+dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.0
 ```
+
+Prebuilt `lib/` artifacts are committed, so Git installation does not execute a build script or require a pnpm `allowBuilds` grant. Run `dsh --profile web --dump-config` to verify the layer, then restart `dsh web`.
 
 The plugin uses the browser Web Speech API. Edge and Chrome commonly send microphone audio to the browser vendor's online speech service. The plugin does not store audio or send it to Harness/DeepSeek, but it is not an offline recognizer.
 
