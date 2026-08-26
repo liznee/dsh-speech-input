@@ -107,6 +107,29 @@ describe('VoiceRecognitionController', () => {
     assert.equal(states.at(-1), 'idle')
   })
 
+  it('keeps the recognizer alive long enough to commit a final result delivered after stop', () => {
+    let draft = ''
+    const states = []
+    const recognition = new FakeRecognition()
+    recognition.stop = function stop() { this.stopCalls += 1 }
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: state => { states.push(state.phase) },
+      language: () => 'zh-CN',
+      punctuation: () => 'smart',
+    })
+
+    controller.start()
+    controller.stop()
+    recognition.result([speechResult('发送这段话', true)])
+    recognition.end()
+
+    assert.equal(draft, '发送这段话。')
+    assert.equal(states.at(-1), 'idle')
+  })
+
   it('reports denied microphone permission and does not restart', () => {
     let draft = ''
     const states = []
