@@ -13,6 +13,7 @@ export const zh = {
   start: '语音输入（点击开始）',
   starting: '正在启动麦克风…',
   stop: '正在听写，点击停止',
+  finishing: '正在完成听写…',
   cancel: '取消本次语音输入',
   waveform: '语音活动',
   'listening-block': '正在语音输入，停止或取消后可发送',
@@ -29,6 +30,7 @@ export const en = {
   start: 'Voice input (click to start)',
   starting: 'Starting microphone…',
   stop: 'Listening, click to stop',
+  finishing: 'Finishing dictation…',
   cancel: 'Cancel this dictation',
   waveform: 'Voice activity',
   'listening-block': 'Voice input is active; stop or cancel to send',
@@ -276,13 +278,14 @@ export function SpeechInputButton({
     if (busy) controller.current?.stop()
   }, [busy])
 
-  const active = voice.phase === 'starting' || voice.phase === 'listening'
+  const active = voice.phase === 'starting' || voice.phase === 'listening' || voice.phase === 'stopping'
   const error = voice.phase === 'error'
   let label = t('start')
   if (!supported) label = t('unsupported')
   else if (busy) label = t('busy')
   else if (voice.phase === 'starting') label = t('starting')
   else if (voice.phase === 'listening') label = t('stop')
+  else if (voice.phase === 'stopping') label = t('finishing')
   else if (error) label = t(voice.reason ?? 'recognition-failed')
 
   React.useEffect(() => {
@@ -338,6 +341,7 @@ export function SpeechInputButton({
           'aria-pressed': true,
           className: 'dsh-speech-input-button',
           'data-active': 'true',
+          disabled: voice.phase === 'stopping',
           onClick: () => { ensureController().stop() },
           title: t('stop'),
           type: 'button',

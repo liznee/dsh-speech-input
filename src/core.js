@@ -103,6 +103,7 @@ export class VoiceRecognitionController {
     this.options = options
     this.recognition = null
     this.active = false
+    this.stopping = false
     this.destroyed = false
     this.generation = 0
     this.baseDraft = ''
@@ -116,6 +117,7 @@ export class VoiceRecognitionController {
   start() {
     if (this.destroyed || this.active) return false
     this.active = true
+    this.stopping = false
     this.generation += 1
     this.baseDraft = String(this.options.getDraft() ?? '')
     this.speech = ''
@@ -129,21 +131,21 @@ export class VoiceRecognitionController {
 
   stop() {
     if (!this.active) return false
-    this.active = false
-    this.generation += 1
+    this.stopping = true
+    this.options.onState({ phase: 'stopping' })
     const recognition = this.recognition
-    this.recognition = null
-    if (recognition !== null) {
-      try { recognition.stop() } catch {}
+    if (recognition === null) {
+      this.completeStop()
+      return true
     }
-    this.finishDraft()
-    this.options.onState({ phase: 'idle' })
+    try { recognition.stop() } catch { this.completeStop() }
     return true
   }
 
   cancel() {
     if (!this.active) return false
     this.active = false
+    this.stopping = false
     this.generation += 1
     const recognition = this.recognition
     this.recognition = null
@@ -161,6 +163,7 @@ export class VoiceRecognitionController {
     if (this.destroyed) return
     this.destroyed = true
     this.active = false
+    this.stopping = false
     this.generation += 1
     const recognition = this.recognition
     this.recognition = null
@@ -225,6 +228,10 @@ export class VoiceRecognitionController {
     }
     recognition.onend = () => {
       if (this.recognition === recognition) this.recognition = null
+      if (this.stopping && generation === this.generation) {
+        this.completeStop()
+        return
+      }
       if (!this.active || this.destroyed || generation !== this.generation) return
 
       this.options.onState({ phase: 'starting' })
@@ -271,6 +278,16 @@ export class VoiceRecognitionController {
     )
     this.speech = next
     this.options.setDraft(draft)
+  }
+
+  completeStop() {
+    if (!this.active && !this.stopping) return
+    this.active = false
+    this.stopping = false
+    this.generation += 1
+    this.recognition = null
+    this.finishDraft()
+    this.options.onState({ phase: 'idle' })
   }
 
   finishDraft() {
