@@ -1,6 +1,11 @@
 const CHINESE = /\p{Script=Han}/u
 const ASCII_WORD = /[A-Za-z0-9]/
 
+/** 停止后等待浏览器 end 事件的最长时间；超时强制收尾，避免输入框永久禁用。 */
+const STOP_WATCHDOG_MS = 2_500
+/** 启动后等待 onstart 的最长时间；超时判定启动失败并释放。 */
+const START_WATCHDOG_MS = 10_000
+
 function boundarySpace(left, right) {
   if (!left || !right || /\s$/.test(left) || /^\s/.test(right)) return ''
   const last = left.at(-1)
@@ -104,6 +109,7 @@ export class VoiceRecognitionController {
     this.recognition = null
     this.active = false
     this.stopping = false
+    this.started = false
     this.destroyed = false
     this.generation = 0
     this.baseDraft = ''
@@ -118,6 +124,7 @@ export class VoiceRecognitionController {
     if (this.destroyed || this.active) return false
     this.active = true
     this.stopping = false
+    this.started = false
     this.generation += 1
     this.baseDraft = String(this.options.getDraft() ?? '')
     this.speech = ''
@@ -126,7 +133,9 @@ export class VoiceRecognitionController {
     this.roundInterim = ''
     this.silentEnds = 0
     this.options.onState({ phase: 'starting' })
-    return this.openRecognition(this.generation)
+    const opened = this.openRecognition(this.generation)
+    if (opened && !this.started) this.armStartWatchdog()
+    return opened
   }
 
   stop() {
@@ -134,11 +143,22 @@ export class VoiceRecognitionController {
     this.stopping = true
     this.options.onState({ phase: 'stopping' })
     const recognition = this.recognition
-    if (recognition === null) {
+    if (recognition === null || !this.started) {
+      // 识别器尚未真正启动（onstart 未触发）时，浏览器不会对 stop() 产生
+      // 任何事件；直接收尾，否则阶段会永远停在 stopping，输入框一直禁用。
+      if (recognition !== null) {
+        try { recognition.abort() } catch {}
+      }
       this.completeStop()
       return true
     }
-    try { recognition.stop() } catch { this.completeStop() }
+    this.armStopWatchdog()
+    try {
+      recognition.stop()
+    } catch {
+      try { recognition.abort() } catch {}
+      this.completeStop()
+    }
     return true
   }
 
@@ -146,6 +166,7 @@ export class VoiceRecognitionController {
     if (!this.active) return false
     this.active = false
     this.stopping = false
+    this.started = false
     this.generation += 1
     const recognition = this.recognition
     this.recognition = null
@@ -164,12 +185,63 @@ export class VoiceRecognitionController {
     this.destroyed = true
     this.active = false
     this.stopping = false
+    this.started = false
     this.generation += 1
     const recognition = this.recognition
     this.recognition = null
     if (recognition !== null) {
       try { recognition.abort() } catch {}
     }
+  }
+
+  /** 定时兜底：到期后仅当守卫条件仍成立且状态代次未变时才执行动作。 */
+  armWatchdog(guard, action, delay) {
+    const generation = this.generation
+    const schedule = this.options.schedule ?? ((callback, wait) => setTimeout(callback, wait))
+    schedule(() => {
+      if (!guard() || generation !== this.generation) return
+      action()
+    }, delay)
+  }
+
+  /** 启动超时：识别器从未触发 onstart，判定启动失败并释放。 */
+  armStartWatchdog() {
+    this.armWatchdog(
+      () => this.active && !this.destroyed && !this.started,
+      () => this.failStart(),
+      START_WATCHDOG_MS,
+    )
+  }
+
+  /** 停止超时：浏览器永不触发 onend 时强制收尾，保留已识别文本。 */
+  armStopWatchdog() {
+    this.armWatchdog(
+      () => this.stopping,
+      () => this.forceStop(),
+      STOP_WATCHDOG_MS,
+    )
+  }
+
+  failStart() {
+    const recognition = this.recognition
+    this.active = false
+    this.stopping = false
+    this.started = false
+    this.generation += 1
+    this.recognition = null
+    if (recognition !== null) {
+      try { recognition.abort() } catch {}
+    }
+    this.options.onState({ phase: 'error', reason: 'start-failed' })
+  }
+
+  forceStop() {
+    const recognition = this.recognition
+    this.recognition = null
+    if (recognition !== null) {
+      try { recognition.abort() } catch {}
+    }
+    this.completeStop()
   }
 
   openRecognition(generation) {
@@ -188,6 +260,7 @@ export class VoiceRecognitionController {
     }
 
     this.recognition = recognition
+    this.started = false
     this.roundFinal = ''
     this.roundInterim = ''
     recognition.lang = this.options.language()
@@ -195,6 +268,7 @@ export class VoiceRecognitionController {
     recognition.interimResults = true
     recognition.onstart = () => {
       if (this.active && generation === this.generation) {
+        this.started = true
         this.options.onState({ phase: 'listening', speaking: false })
       }
     }
@@ -222,6 +296,8 @@ export class VoiceRecognitionController {
       const error = String(event?.error ?? 'unknown')
       if (error === 'no-speech' || error === 'aborted') return
       this.active = false
+      this.stopping = false
+      this.started = false
       this.generation += 1
       this.recognition = null
       this.options.onState({ phase: 'error', reason: failureReason(error) })
@@ -252,7 +328,10 @@ export class VoiceRecognitionController {
       const schedule = this.options.schedule ?? ((callback, wait) => setTimeout(callback, wait))
       schedule(() => {
         if (this.active && !this.destroyed && restartGeneration === this.generation) {
-          this.openRecognition(restartGeneration)
+          // 重开的会话同样挂启动看门狗：引擎若永不触发 onstart，
+          // 兜底转 error，避免 starting 阶段永久卡住输入框。
+          const opened = this.openRecognition(restartGeneration)
+          if (opened && !this.started) this.armStartWatchdog()
         }
       }, delay)
     }
@@ -284,6 +363,7 @@ export class VoiceRecognitionController {
     if (!this.active && !this.stopping) return
     this.active = false
     this.stopping = false
+    this.started = false
     this.generation += 1
     this.recognition = null
     this.finishDraft()
