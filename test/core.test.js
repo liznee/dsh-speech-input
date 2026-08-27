@@ -89,6 +89,7 @@ describe('VoiceRecognitionController', () => {
       onState: state => { states.push(state.phase) },
       language: () => 'zh-CN',
       punctuation: () => 'smart',
+      schedule: () => {},
     })
 
     assert.equal(controller.start(), true)
@@ -110,6 +111,7 @@ describe('VoiceRecognitionController', () => {
   it('keeps the recognizer alive long enough to commit a final result delivered after stop', () => {
     let draft = ''
     const states = []
+    const scheduled = []
     const recognition = new FakeRecognition()
     recognition.stop = function stop() { this.stopCalls += 1 }
     const controller = new VoiceRecognitionController({
@@ -119,6 +121,7 @@ describe('VoiceRecognitionController', () => {
       onState: state => { states.push(state.phase) },
       language: () => 'zh-CN',
       punctuation: () => 'smart',
+      schedule: fn => { scheduled.push(fn) },
     })
 
     controller.start()
@@ -221,5 +224,211 @@ describe('VoiceRecognitionController', () => {
     controller.cancel()
     assert.equal(draft, '已有草稿手工追加')
     assert.equal(recognition.abortCalls, 1)
+  })
+
+  it('finishes immediately when stop lands before the recognizer has started', () => {
+    let draft = ''
+    const states = []
+    const recognition = new FakeRecognition()
+    recognition.start = function start() { this.startCalls += 1 }
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: state => { states.push(state) },
+      language: () => 'zh-CN',
+      punctuation: () => 'smart',
+      schedule: () => {},
+    })
+
+    controller.start()
+    assert.equal(states.at(-1).phase, 'starting')
+    controller.stop()
+
+    assert.equal(states.at(-1).phase, 'idle')
+    assert.equal(recognition.abortCalls, 1)
+    assert.equal(recognition.stopCalls, 0)
+  })
+
+  it('recovers via watchdog when the browser never ends a stopped recognition', () => {
+    let draft = ''
+    const states = []
+    const scheduled = []
+    const recognition = new FakeRecognition()
+    recognition.stop = function stop() { this.stopCalls += 1 }
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: state => { states.push(state) },
+      language: () => 'zh-CN',
+      punctuation: () => 'smart',
+      schedule: fn => { scheduled.push(fn) },
+    })
+
+    controller.start()
+    recognition.result([speechResult('发送这段话')])
+    controller.stop()
+    assert.equal(states.at(-1).phase, 'stopping')
+    assert.equal(scheduled.length, 1)
+
+    scheduled.shift()()
+
+    assert.equal(states.at(-1).phase, 'idle')
+    assert.equal(draft, '发送这段话。')
+    assert.equal(recognition.abortCalls, 1)
+  })
+
+  it('fails to an error state when the recognizer never signals start', () => {
+    let draft = ''
+    const states = []
+    const scheduled = []
+    const recognition = new FakeRecognition()
+    recognition.start = function start() { this.startCalls += 1 }
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: state => { states.push(state) },
+      language: () => 'zh-CN',
+      punctuation: () => 'smart',
+      schedule: fn => { scheduled.push(fn) },
+    })
+
+    controller.start()
+    assert.equal(states.at(-1).phase, 'starting')
+    assert.equal(scheduled.length, 1)
+
+    scheduled.shift()()
+
+    assert.equal(states.at(-1).phase, 'error')
+    assert.equal(states.at(-1).reason, 'start-failed')
+    assert.equal(recognition.abortCalls, 1)
+  })
+
+  it('recovers when a restarted recognizer never signals start', () => {
+    const recognitions = []
+    const scheduled = []
+    const phases = []
+    const silent = new FakeRecognition()
+    silent.start = function start() { this.startCalls += 1 }
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => {
+        const recognition = recognitions.length === 0 ? new FakeRecognition() : silent
+        recognitions.push(recognition)
+        return recognition
+      },
+      getDraft: () => '',
+      setDraft: () => {},
+      onState: state => { phases.push(state) },
+      language: () => 'zh-CN',
+      punctuation: () => 'keep',
+      schedule: fn => { scheduled.push(fn) },
+    })
+
+    controller.start()
+    recognitions.at(-1).end()
+    // 静默结束后的重开回调
+    assert.equal(scheduled.length, 1)
+    scheduled.shift()()
+    assert.equal(recognitions.length, 2)
+    assert.equal(phases.at(-1).phase, 'starting')
+    // 重开的识别器永不触发 onstart：启动看门狗应兜底
+    assert.equal(scheduled.length, 1)
+
+    scheduled.shift()()
+
+    assert.equal(phases.at(-1).phase, 'error')
+    assert.equal(phases.at(-1).reason, 'start-failed')
+    assert.equal(silent.abortCalls, 1)
+  })
+
+  it('ignores watchdog ticks after a normal stop has already settled', () => {
+    let draft = ''
+    const states = []
+    const scheduled = []
+    const recognition = new FakeRecognition()
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: state => { states.push(state.phase) },
+      language: () => 'zh-CN',
+      punctuation: () => 'smart',
+      schedule: fn => { scheduled.push(fn) },
+    })
+
+    controller.start()
+    recognition.result([speechResult('正常结束')])
+    controller.stop()
+    assert.equal(states.at(-1), 'idle')
+    assert.equal(draft, '正常结束。')
+    assert.equal(scheduled.length, 1)
+
+    scheduled.shift()()
+
+    assert.equal(states.at(-1), 'idle')
+    assert.equal(draft, '正常结束。')
+    assert.equal(recognition.abortCalls, 0)
+  })
+
+  it('ignores a stale start watchdog after stop settles first', () => {
+    const states = []
+    const scheduled = []
+    const recognition = new FakeRecognition()
+    recognition.start = function start() { this.startCalls += 1 }
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => '',
+      setDraft: () => {},
+      onState: state => { states.push(state) },
+      language: () => 'zh-CN',
+      punctuation: () => 'keep',
+      schedule: fn => { scheduled.push(fn) },
+    })
+
+    controller.start()
+    assert.equal(scheduled.length, 1)
+    controller.stop()
+    assert.equal(states.at(-1).phase, 'idle')
+
+    scheduled.shift()()
+
+    assert.equal(states.at(-1).phase, 'idle')
+    assert.equal(states.some(state => state.phase === 'error'), false)
+  })
+
+  it('retains committed rounds when stopping during a silent restart gap', () => {
+    let draft = ''
+    const states = []
+    const scheduled = []
+    const recognitions = []
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => {
+        const recognition = new FakeRecognition()
+        recognitions.push(recognition)
+        return recognition
+      },
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: state => { states.push(state) },
+      language: () => 'zh-CN',
+      punctuation: () => 'smart',
+      schedule: fn => { scheduled.push(fn) },
+    })
+
+    controller.start()
+    const recognition = recognitions.at(-1)
+    recognition.result([speechResult('已提交轮次')])
+    recognition.end()
+    assert.equal(states.at(-1).phase, 'starting')
+
+    controller.stop()
+
+    assert.equal(states.at(-1).phase, 'idle')
+    assert.equal(draft, '已提交轮次。')
+    // 遗留的重开回调不应再创建识别器
+    scheduled.shift()()
+    assert.equal(recognitions.length, 1)
   })
 })
