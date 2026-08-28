@@ -34,6 +34,7 @@ export const zh = {
   network: '语音识别网络连接失败，请稍后重试',
   'recognition-failed': '语音识别失败，请重试',
   'start-failed': '麦克风启动失败，请稍后重试',
+  'speech-privacy': '语音隐私未授权，请在“设置→隐私和安全性→语音”中开启语音识别',
 }
 
 export const en = {
@@ -51,6 +52,7 @@ export const en = {
   network: 'Speech recognition could not reach its service; try again later',
   'recognition-failed': 'Speech recognition failed; try again',
   'start-failed': 'The microphone could not start; try again',
+  'speech-privacy': 'Speech privacy is not accepted; enable speech recognition in Settings > Privacy & security > Speech',
 }
 
 const STYLES = `

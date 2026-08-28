@@ -99,6 +99,7 @@ function failureReason(error) {
   if (error === 'not-allowed' || error === 'service-not-allowed') return 'permission-denied'
   if (error === 'audio-capture') return 'microphone-unavailable'
   if (error === 'network') return 'network'
+  if (error === 'privacy-policy-not-accepted') return 'speech-privacy'
   return 'recognition-failed'
 }
 

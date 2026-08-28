@@ -90,6 +90,27 @@ describe('WindowsBridgeRecognition', () => {
     assert.equal(ended, true)
   })
 
+  it('surfaces the bridge start error when privacy is not accepted', async () => {
+    const rec = new WindowsBridgeRecognition({
+      launcher: () => Promise.resolve(),
+      fetchImpl: fakeFetch({
+        'GET /health': () => ({ ok: true }),
+        'POST /start': () => ({ started: false, error: 'privacy-policy-not-accepted' }),
+      }),
+      sleep: () => Promise.resolve(),
+    })
+    const errors = []
+    let started = false
+    let ended = false
+    rec.onerror = evt => errors.push(evt.error)
+    rec.onstart = () => { started = true }
+    rec.onend = () => { ended = true }
+    await rec.start()
+    assert.equal(errors.includes('privacy-policy-not-accepted'), true)
+    assert.equal(started, false)
+    assert.equal(ended, true)
+  })
+
   it('abort clears the poller and fires onend', async () => {
     const poller = capturePoller()
     const rec = new WindowsBridgeRecognition({

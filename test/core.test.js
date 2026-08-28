@@ -157,6 +157,28 @@ describe('VoiceRecognitionController', () => {
     assert.equal(scheduled.length, 0)
   })
 
+  it('maps the Windows speech-privacy gate to a clear error reason', () => {
+    let draft = ''
+    const states = []
+    const recognition = new FakeRecognition()
+    const controller = new VoiceRecognitionController({
+      createRecognition: () => recognition,
+      getDraft: () => draft,
+      setDraft: value => { draft = value },
+      onState: state => { states.push(state) },
+      language: () => 'zh-CN',
+      punctuation: () => 'keep',
+      schedule: () => {},
+    })
+
+    controller.start()
+    recognition.error('privacy-policy-not-accepted')
+    recognition.end()
+
+    assert.equal(states.at(-1).phase, 'error')
+    assert.equal(states.at(-1).reason, 'speech-privacy')
+  })
+
   it('aborts recognition during teardown', () => {
     const recognition = new FakeRecognition()
     const controller = new VoiceRecognitionController({

@@ -32,11 +32,21 @@ export class WindowsBridgeRecognition {
     if (this._active) return
     this._active = true
     const generation = ++this._generation
+    let payload
     try {
-      await this.bridge.start(this.launcher)
+      payload = await this.bridge.start(this.launcher)
     } catch (error) {
       this._active = false
       this.onerror?.({ error: error?.message === 'bridge-unavailable' ? 'bridge-unavailable' : 'start-failed' })
+      this.onend?.()
+      return
+    }
+    // The bridge can start its listener but still fail to begin recognition
+    // (e.g. the speech privacy policy was not accepted). Surface that so the
+    // UI shows an actionable message instead of silently staying idle.
+    if (payload?.error || payload?.started === false) {
+      this._active = false
+      this.onerror?.({ error: payload?.error || 'start-failed' })
       this.onend?.()
       return
     }
