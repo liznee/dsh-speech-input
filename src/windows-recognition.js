@@ -6,8 +6,11 @@
  * same-origin host route /dsh-speech-input/bridge/recognize, and the host
  * spawns the bridge, runs one recognition pass, and returns { text, error }.
  *
- * The returned text is emitted as a final onresult, so VoiceRecognitionController
- * and SpeechInputButton work unchanged.
+ * VoiceRecognitionController treats recognizers as synchronous, event-driven
+ * objects (like webkitSpeechRecognition): start() returns immediately and the
+ * recognizer later fires onstart/onresult/onend. To be compatible we fire
+ * onstart synchronously (so the controller leaves "starting"), then perform the
+ * async POST and fire onresult + onend when the host answers.
  */
 export class WindowsBridgeRecognition {
   constructor({ endpoint = '/dsh-speech-input/bridge/recognize', stopEndpoint = '/dsh-speech-input/bridge/stop', fetchImpl, sleep } = {}) {
@@ -28,36 +31,40 @@ export class WindowsBridgeRecognition {
 
   async _post(endpoint) {
     const res = await this.fetchImpl(endpoint, { method: 'POST' })
-    if (!res.ok) {
-      throw new Error(`bridge request failed (${res.status})`)
-    }
+    if (!res.ok) throw new Error(`bridge request failed (${res.status})`)
     return res.json()
   }
 
-  async start() {
+  start() {
     if (this._active) return
     this._active = true
     const generation = ++this._generation
+    // Fire onstart synchronously so the controller leaves "starting" right away.
+    this.onstart?.()
+    // Run the async recognition pass and deliver its result as events.
+    void this._run(generation)
+  }
+
+  async _run(generation) {
     let payload
     try {
       payload = await this._post(this.endpoint)
     } catch (error) {
+      if (generation !== this._generation) return
       this._active = false
       this.onerror?.({ error: error?.message?.includes('unavailable') ? 'bridge-unavailable' : 'start-failed' })
       this.onend?.()
       return
     }
+    if (generation !== this._generation) return
     if (payload?.error) {
       this._active = false
       this.onerror?.({ error: payload.error })
       this.onend?.()
       return
     }
-    this.onstart?.()
     const text = typeof payload?.text === 'string' ? payload.text : ''
-    if (text !== '') {
-      this._emitResult(text, true)
-    }
+    if (text !== '') this._emitResult(text, true)
     this._active = false
     this.onend?.()
   }
@@ -68,15 +75,12 @@ export class WindowsBridgeRecognition {
     this.onresult?.({ resultIndex: 0, results: [result] })
   }
 
-  async stop() {
+  stop() {
     if (!this._active) { this.onend?.(); return }
     this._active = false
     this._generation += 1
-    try {
-      await this._post(this.stopEndpoint)
-    } catch {
-      /* ignore */
-    }
+    // Best-effort stop; fire onend synchronously so the session settles.
+    void this._post(this.stopEndpoint).catch(() => {})
     this.onend?.()
   }
 

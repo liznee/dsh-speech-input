@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.7] - 2026-08-27
+
+### Fixed
+
+- **Fix the "no reaction at all" root cause**: the Windows bridge recognizer is
+  asynchronous, but `VoiceRecognitionController` treats recognizers as
+  synchronous, event-driven objects. The recognizer now fires `onstart`
+  synchronously (so the button leaves "正在启动麦克风…") and performs the
+  async recognition in the background, delivering the result as an `onresult`
+  event. Previously the client stayed stuck at "starting" and never sent the
+  recognition request.
+
 ## [0.1.6] - 2026-08-27
 
 ### Changed
@@ -77,6 +89,7 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.1.7]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.7
 [0.1.6]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.6
 [0.1.5]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.5
 [0.1.4]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.4

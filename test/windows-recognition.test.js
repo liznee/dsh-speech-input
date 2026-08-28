@@ -12,8 +12,10 @@ function fakeFetch(routes) {
   }
 }
 
+async function tick() { await new Promise(r => setTimeout(r, 0)) }
+
 describe('WindowsBridgeRecognition (same-origin host route)', () => {
-  it('emits the returned text as a final result', async () => {
+  it('fires onstart synchronously, then emits text as a final result', async () => {
     const rec = new WindowsBridgeRecognition({
       fetchImpl: fakeFetch({
         '/dsh-speech-input/bridge/recognize': () => ({ text: '你好世界', error: null }),
@@ -27,9 +29,11 @@ describe('WindowsBridgeRecognition (same-origin host route)', () => {
     rec.onend = () => states.push('end')
     rec.onresult = evt => results.push(evt.results[0][0].transcript)
 
-    await rec.start()
+    rec.start()
     assert.equal(states.includes('start'), true)
+    await tick()
     assert.equal(results.at(-1), '你好世界')
+    await tick()
     assert.equal(states.at(-1), 'end')
   })
 
@@ -46,7 +50,8 @@ describe('WindowsBridgeRecognition (same-origin host route)', () => {
     rec.onerror = evt => errors.push(evt.error)
     rec.onresult = evt => results.push(evt.results[0][0].transcript)
     rec.onend = () => { ended = true }
-    await rec.start()
+    rec.start()
+    await tick()
     assert.equal(errors.includes('privacy-policy-not-accepted'), true)
     assert.equal(results.length, 0)
     assert.equal(ended, true)
@@ -61,40 +66,33 @@ describe('WindowsBridgeRecognition (same-origin host route)', () => {
     let ended = false
     rec.onerror = evt => errors.push(evt.error)
     rec.onend = () => { ended = true }
-    await rec.start()
+    rec.start()
+    await tick()
     assert.equal(errors.includes('start-failed'), true)
     assert.equal(ended, true)
   })
 
   it('treats bridge-unavailable as a distinct error', async () => {
     const rec = new WindowsBridgeRecognition({
-      fetchImpl: async (url, opts) => {
-        throw new Error('bridge-unavailable')
-      },
+      fetchImpl: async () => { throw new Error('bridge-unavailable') },
       sleep: () => Promise.resolve(),
     })
     const errors = []
     rec.onerror = evt => errors.push(evt.error)
-    await rec.start()
-    // Error message contains 'unavailable' => mapped to bridge-unavailable.
+    rec.start()
+    await tick()
     assert.equal(errors.includes('bridge-unavailable'), true)
   })
 
-  it('stop fires onend', async () => {
-    const rec = new WindowsBridgeRecognition({
-      fetchImpl: fakeFetch({
-        '/dsh-speech-input/bridge/recognize': () => ({ text: 'x', error: null }),
-        '/dsh-speech-input/bridge/stop': () => ({ stopped: true }),
-      }),
-      sleep: () => Promise.resolve(),
-    })
+  it('stop fires onend even without an active session', () => {
+    const rec = new WindowsBridgeRecognition({})
     let ended = false
     rec.onend = () => { ended = true }
-    await rec.stop()
+    rec.stop()
     assert.equal(ended, true)
   })
 
-  it('abort fires onend without error', async () => {
+  it('abort fires onend without error', () => {
     const rec = new WindowsBridgeRecognition({})
     let ended = false
     rec.onend = () => { ended = true }
