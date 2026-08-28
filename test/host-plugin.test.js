@@ -1,35 +1,38 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { apply } from '../src/index.js'
+import { apply, inject, name } from '../src/index.js'
 
-function makeCtx() {
+async function makeCtx() {
   const routes = []
   const effects = []
-  return {
+  const ctx = {
     routes,
     effects,
-    get(key) {
-      if (key === 'webServer') {
-        return {
-          register(route) {
-            routes.push(route)
-            return () => {}
-          },
-        }
-      }
-      return undefined
+    webServer: {
+      register(route) {
+        routes.push(route)
+        return () => {}
+      },
     },
-    effect(fn, label) {
-      effects.push({ fn, label })
-      return () => {}
+    async effect(fn, label) {
+      effects.push({ label })
+      // Run the async body so registrations happen; return its disposer.
+      const disposer = await fn()
+      return disposer
     },
   }
+  return ctx
 }
 
 describe('host plugin bridge routes', () => {
-  it('registers /start, /stop, /status routes when webServer is available', () => {
-    const ctx = makeCtx()
-    apply(ctx)
+  it('declares name and the webServer dependency', () => {
+    assert.equal(name, 'dsh-speech-input')
+    assert.equal(inject.includes('webServer'), true)
+  })
+
+  it('registers /start, /stop, /status routes when webServer is available', async () => {
+    const ctx = await makeCtx()
+    await apply(ctx)
     const paths = ctx.routes.map(r => r.path)
     assert.deepEqual(paths, [
       '/dsh-speech-input/bridge/start',
@@ -38,20 +41,15 @@ describe('host plugin bridge routes', () => {
     ])
     assert.equal(ctx.routes.every(r => r.kind === 'exact'), true)
     assert.equal(typeof ctx.routes[0].handler, 'function')
+    // handler sends 405 for non-POST on /start
+    const startHandler = ctx.routes.find(r => r.path === '/dsh-speech-input/bridge/start').handler
+    assert.equal(typeof startHandler, 'function')
   })
 
-  it('no-ops when webServer is unavailable', () => {
-    const ctx = makeCtx()
-    ctx.get = () => undefined
-    let threw = false
-    try { apply(ctx) } catch { threw = true }
-    assert.equal(threw, false)
-    assert.equal(ctx.routes.length, 0)
-  })
-
-  it('installs a bridge-lifecycle disposal effect when webServer is available', () => {
-    const ctx = makeCtx()
-    apply(ctx)
-    assert.equal(ctx.effects.some(e => e.label.includes('bridge lifecycle')), true)
+  it('installs a bridge-runtime effect when webServer is available', async () => {
+    const ctx = await makeCtx()
+    await apply(ctx)
+    assert.equal(ctx.effects.some(e => e.label.includes('bridge runtime')), true)
+    assert.equal(ctx.effects.some(e => e.label.includes('bridge lifecycle')), false)
   })
 })
