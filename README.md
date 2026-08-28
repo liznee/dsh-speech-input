@@ -1,63 +1,42 @@
 # dsh-speech-input
 
-[![CI](https://github.com/liznee/dsh-speech-input/actions/workflows/ci.yml/badge.svg)](https://github.com/liznee/dsh-speech-input/actions/workflows/ci.yml)
-
 [中文](#中文) | [English](#english)
 
 ## 中文
 
 `dsh-speech-input` 为 DeepSeek Harness Web 输入框增加一个原生麦克风按钮。点击开始听写，识别结果实时写入当前草稿；再次点击停止并补全句末标点。插件不会自动发送消息。
 
-<img width="780" height="94" alt="image" src="https://github.com/user-attachments/assets/500e8131-126a-4ee1-b30d-6375460b7ab4" />
-
-
-<img width="780" height="134" alt="image" src="https://github.com/user-attachments/assets/319f6707-eb4a-4f33-b9a0-e9dd60132c14" />
-
-
 ### 特性
 
 - 使用官方 `conversation.input.right` 插槽，不查询或改写 Harness DOM
 - 支持 Chrome / Edge 的 Web Speech API，中英文跟随浏览器语言
-- **Windows 本地语音引擎优先**：通过即时拉起的本地桥接进程调用
-  `Windows.Media.SpeechRecognition`（zh-Hans-CN 离线中文包）。在 Chrome 无法连到
-  Google 语音服务（大陆常见）、或想离线用时也能转写；桥接进程只在点击麦克风时启动，
-  停止或空闲即退出，不常驻后台。桥接不可用时会自动回退到浏览器 Web Speech
 - 中间识别结果原位更新，不会反复叠加同一句话
 - 听写期间在识别文字后手工补写的内容会保留
 - 无语音、停顿或浏览器结束单次识别时会持续自动续听，只有再次点击停止按钮才结束
-- 听写中显示“灰色圆形取消 ×｜铺满可用宽度的实时音量条｜方块停止”，采用 Codex 风格
+- 听写中显示“灰色圆形取消 ×｜铺满可用宽度的实时音量条｜方块停止”，采用 Codex 风格，不使用红色录音状态
 - 音量条通过 Web Audio API 在本地计算麦克风 RMS 音量，展示最近 24 个真实音量样本，不使用循环假动画
 - 听写期间 Harness 的发送按钮和 Enter 发送会由官方接口置灰禁用；停止或取消后恢复
 - 点击取消会移除本轮语音产生的全部文字，并保留开始听写前的草稿与可识别的手工追加内容
 - 权限、麦克风或网络硬错误会给出明确提示
 - 页面切换或插件卸载时中止识别并释放麦克风
 - 支持键盘焦点、屏幕阅读器状态播报和减少动态效果偏好
-- 纯浏览器插件，不需要额外 API key 或模型下载；Windows 下可借助系统自带离线语音引擎
+- 纯浏览器插件，不需要额外 API key、服务端或模型下载
 
 ### 安装
 
-`v0.1.9` 已在 DeepSeek Harness `0.1.1-rc.1` 上验证。当前 Harness 需要 Node.js `22.19+` 或 `24+`。
-
-从 npm Registry 安装固定版本：
+直接从 GitHub 安装到 Harness Web profile：
 
 ```sh
-dsh plugin --profile web add dsh-speech-input@0.1.9
-```
-
-也可以安装对应的 GitHub Release：
-
-```sh
-dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.9
+dsh plugin --profile web add github:liznee/dsh-speech-input
 ```
 
 仓库已提交预构建的 `lib/`，Git 安装不会执行构建脚本，也不需要在
-`pnpm-workspace.yaml` 中授权 `allowBuilds`。安装后运行
-`dsh --profile web --dump-config`，输出中应出现 `# == dsh-speech-input`；随后重启 `dsh web`。
+`pnpm-workspace.yaml` 中授权 `allowBuilds`。安装或升级后重启 `dsh web`。
 
-升级时，将上述安装命令中的 `0.1.9` 替换为准备安装的新版本。卸载命令：
+未来发布到 npm 后也可使用：
 
 ```sh
-dsh plugin --profile web remove dsh-speech-input
+dsh plugin --profile web add dsh-speech-input
 ```
 
 本地 tarball：
@@ -66,27 +45,15 @@ dsh plugin --profile web remove dsh-speech-input
 npm ci
 npm test
 npm pack
-dsh plugin --profile web add ./dsh-speech-input-0.1.9.tgz
+dsh plugin --profile web add ./dsh-speech-input-0.1.0.tgz
 ```
 
 ### 隐私
 
-插件本身不保存音频、不写日志，也不把音频发送给 Harness 或 DeepSeek。为了显示真实音量，插件会额外打开一条本地麦克风流，只连接到 Web Audio `AnalyserNode` 计算 RMS；不会播放、录制或上传该流，停止或取消时会立即关闭音轨。
-
-识别有两条路径：
-
-- **Windows 本地引擎（默认）**：通过即时拉起的桥接进程调用系统自带的
-  `Windows.Media.SpeechRecognition`，识别音频**不离开本机、不经过 Google**。
-  桥接进程只在点击麦克风时启动，停止或空闲即退出。
-- **浏览器 Web Speech（回退）**：Edge/Chrome 通常会把识别音频交给浏览器厂商的
-  在线语音服务，因此这条路径不是离线识别。若不能接受该数据路径，请不要授权麦克风。
-
-Windows 本地语音识别依赖系统“语音隐私”授权及已安装的语言包（zh-Hans-CN）。
+插件本身不保存音频、不写日志，也不把音频发送给 Harness 或 DeepSeek。为了显示真实音量，插件会额外打开一条本地麦克风流，只连接到 Web Audio `AnalyserNode` 计算 RMS；不会播放、录制或上传该流，停止或取消时会立即关闭音轨。Web Speech API 的识别处理路径仍由浏览器决定：Edge/Chrome 通常会把识别音频交给浏览器厂商的在线语音服务。因此它不是离线识别；若不能接受该数据路径，请不要授权麦克风。
 
 ### 已知限制
 
-- **Windows 本地引擎仅在 Windows** 上可用（依赖系统语音识别服务与中文语言包）。macOS/Linux 会自动回退到浏览器 Web Speech。
-- Windows 首次使用需在系统“设置 → 隐私和安全性 → 语音”里接受语音隐私授权（与 Win+H 语音输入一致）；未接受时本地引擎无法识别，会提示错误。
 - Firefox 当前没有可用的 Web Speech `SpeechRecognition` 实现，按钮会禁用。
 - 识别质量、语言支持和服务可用性取决于浏览器及网络。
 - 浏览器语言就是识别语言；首个版本没有独立语言设置。
@@ -102,19 +69,19 @@ Windows 本地语音识别依赖系统“语音隐私”授权及已安装的语
 
 It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows a gray circular cancel control, a full-width 24-segment meter driven by locally measured microphone RMS, and a square stop control; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition and local metering tracks on teardown, and includes reduced-motion and screen-reader behavior.
 
-Install the fixed npm release:
+Install directly from GitHub:
 
 ```sh
-dsh plugin --profile web add dsh-speech-input@0.1.9
+dsh plugin --profile web add github:liznee/dsh-speech-input
 ```
 
-Or install the matching GitHub Release:
+Prebuilt `lib/` artifacts are committed, so Git installation does not execute a build script or require a pnpm `allowBuilds` grant. Restart `dsh web` after installing or updating.
+
+After a future npm release, this also works:
 
 ```sh
-dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.9
+dsh plugin --profile web add dsh-speech-input
 ```
-
-Prebuilt `lib/` artifacts are committed, so Git installation does not execute a build script or require a pnpm `allowBuilds` grant. Run `dsh --profile web --dump-config` to verify the layer, then restart `dsh web`.
 
 The plugin uses the browser Web Speech API. Edge and Chrome commonly send microphone audio to the browser vendor's online speech service. The plugin does not store audio or send it to Harness/DeepSeek, but it is not an offline recognizer.
 
@@ -136,5 +103,4 @@ MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 ## Project links
 
 - Source and issues: https://github.com/liznee/dsh-speech-input
-- npm package: https://www.npmjs.com/package/dsh-speech-input
 - DeepSeek Harness plugin packaging guide: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md

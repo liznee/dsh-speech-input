@@ -1,19 +1,9 @@
 import React from 'react'
 import { createBrowserMicrophoneLevelMeter } from '../audio-level.js'
 import { VoiceRecognitionController } from '../core.js'
-import { createWindowsRecognition } from '../windows-recognition.js'
 
 const NS = 'speech-input'
 const WAVEFORM_SEGMENTS = 24
-
-// The plugin's apply() may configure a preferred recognition source (the
-// Windows engine bridge) so the mic keeps working in China/offline where the
-// browser Web Speech service is unreachable. Populated at load time.
-let preferredRecognitionFactory = null
-
-export function __setPreferredRecognition(factory) {
-  preferredRecognitionFactory = factory ?? null
-}
 
 function emptyWaveform() {
   return Array.from({ length: WAVEFORM_SEGMENTS }, () => 0)
@@ -23,7 +13,6 @@ export const zh = {
   start: '语音输入（点击开始）',
   starting: '正在启动麦克风…',
   stop: '正在听写，点击停止',
-  finishing: '正在完成听写…',
   cancel: '取消本次语音输入',
   waveform: '语音活动',
   'listening-block': '正在语音输入，停止或取消后可发送',
@@ -34,14 +23,12 @@ export const zh = {
   network: '语音识别网络连接失败，请稍后重试',
   'recognition-failed': '语音识别失败，请重试',
   'start-failed': '麦克风启动失败，请稍后重试',
-  'speech-privacy': '语音隐私未授权，请在“设置→隐私和安全性→语音”中开启语音识别',
 }
 
 export const en = {
   start: 'Voice input (click to start)',
   starting: 'Starting microphone…',
   stop: 'Listening, click to stop',
-  finishing: 'Finishing dictation…',
   cancel: 'Cancel this dictation',
   waveform: 'Voice activity',
   'listening-block': 'Voice input is active; stop or cancel to send',
@@ -52,7 +39,6 @@ export const en = {
   network: 'Speech recognition could not reach its service; try again later',
   'recognition-failed': 'Speech recognition failed; try again',
   'start-failed': 'The microphone could not start; try again',
-  'speech-privacy': 'Speech privacy is not accepted; enable speech recognition in Settings > Privacy & security > Speech',
 }
 
 const STYLES = `
@@ -234,7 +220,6 @@ function CancelIcon() {
 
 export function SpeechInputButton({
   createMeter = createBrowserMicrophoneLevelMeter,
-  createRecognition,
   input,
   inputActions,
   setComposerBlocked,
@@ -247,7 +232,7 @@ export function SpeechInputButton({
   const [waveformLevels, setWaveformLevels] = React.useState(emptyWaveform)
   const controller = React.useRef(null)
   const levelMeter = React.useRef(null)
-  const supported = createRecognition || preferredRecognitionFactory ? true : speechConstructor() !== null
+  const supported = speechConstructor() !== null
   const busy = input?.phase !== 'plain'
 
   const recordLevel = React.useCallback(value => {
@@ -265,13 +250,6 @@ export function SpeechInputButton({
     if (controller.current !== null) return controller.current
     controller.current = new VoiceRecognitionController({
       createRecognition: () => {
-        // Preferred provider wins (Windows engine bridge, configured by apply);
-        // otherwise fall back to the browser's Web Speech when available.
-        if (preferredRecognitionFactory) {
-          const recognition = preferredRecognitionFactory()
-          if (recognition) return recognition
-        }
-        if (createRecognition) return createRecognition()
         const Recognition = speechConstructor()
         return Recognition === null ? null : new Recognition()
       },
@@ -284,7 +262,7 @@ export function SpeechInputButton({
       punctuation: () => 'smart',
     })
     return controller.current
-  }, [createRecognition])
+  }, [])
 
   React.useEffect(() => () => {
     mounted.current = false
@@ -298,14 +276,13 @@ export function SpeechInputButton({
     if (busy) controller.current?.stop()
   }, [busy])
 
-  const active = voice.phase === 'starting' || voice.phase === 'listening' || voice.phase === 'stopping'
+  const active = voice.phase === 'starting' || voice.phase === 'listening'
   const error = voice.phase === 'error'
   let label = t('start')
   if (!supported) label = t('unsupported')
   else if (busy) label = t('busy')
   else if (voice.phase === 'starting') label = t('starting')
   else if (voice.phase === 'listening') label = t('stop')
-  else if (voice.phase === 'stopping') label = t('finishing')
   else if (error) label = t(voice.reason ?? 'recognition-failed')
 
   React.useEffect(() => {
@@ -361,7 +338,6 @@ export function SpeechInputButton({
           'aria-pressed': true,
           className: 'dsh-speech-input-button',
           'data-active': 'true',
-          disabled: voice.phase === 'stopping',
           onClick: () => { ensureController().stop() },
           title: t('stop'),
           type: 'button',
@@ -389,20 +365,7 @@ export function SpeechInputButton({
 
 export const inject = ['slots', 'locale', 'conversation']
 
-// On Windows, prefer the local engine bridge (works in China with no Google
-// reachable). The bridge is launched on demand by the host half; we just ask it
-// to start and it exits on stop. Falls back to Web Speech where the bridge is
-// not configured or unavailable.
-function windowsCreateRecognition() {
-  // Same-origin host route (no cross-origin to 127.0.0.1:8765); the host spawns
-  // the bridge and returns { text, error }.
-  return createWindowsRecognition({})
-}
 export function apply(ctx) {
-  // Prefer the Windows engine bridge so the mic works in China/offline; the
-  // SpeechInputButton still falls back to Web Speech where the bridge is not
-  // configured or is unavailable.
-  __setPreferredRecognition(windowsCreateRecognition)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-speech-input: dictionaries')
   ctx.effect(installStyles, 'dsh-speech-input: styles')
   ctx.slots.inject('conversation.input.right', () => ctx.slots.register({

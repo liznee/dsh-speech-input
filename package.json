@@ -1,6 +1,6 @@
 {
   "name": "dsh-speech-input",
-  "version": "0.1.9",
+  "version": "0.1.0",
   "description": "A microphone button for DeepSeek Harness that writes browser speech recognition into the composer draft.",
   "author": "liznee",
   "repository": {
@@ -27,9 +27,7 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "NOTICE",
-    "CHANGELOG.md",
-    "bridge"
+    "NOTICE"
   ],
   "dsh": {
     "client": {
