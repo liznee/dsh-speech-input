@@ -14,6 +14,8 @@ All notable changes to this project are documented in this file.
   exits on stop or idle — it never lingers in the background.
 - The mic prefers the Windows-local engine and falls back to the browser's Web
   Speech where the bridge is unavailable.
+- Clear, actionable error messages when the Windows speech-privacy gate blocks
+  recognition (e.g. "语音语音隐私未授权…"), instead of a silent failure.
 
 ## [0.1.1] - 2026-08-27
 
