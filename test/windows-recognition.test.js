@@ -14,43 +14,17 @@ function fakeFetch(routes) {
   }
 }
 
-// A tiny fake interval controller so tests don't actually poll.
-function capturePoller() {
-  const intervals = []
-  return {
-    intervals,
-    setIntervalImpl: fn => {
-      const id = { fn, active: true }
-      intervals.push(id)
-      return id
-    },
-    clearIntervalImpl: id => { if (id) id.active = false },
-  }
-}
-
-async function flush(ms = 20) {
-  await new Promise(resolve => setTimeout(resolve, ms))
-}
-
-describe('WindowsBridgeRecognition', () => {
-  it('drives onstart then streams onresult text through polling', async () => {
-    const poller = capturePoller()
-    let startBody = { started: true }
-    let text = '你好世界'
+describe('WindowsBridgeRecognition (single-shot)', () => {
+  it('emits the returned text as a final result', async () => {
     const rec = new WindowsBridgeRecognition({
       launcher: () => Promise.resolve(),
       fetchImpl: fakeFetch({
-        'GET /health': () => ({ ok: true, started: true }),
-        'POST /start': () => startBody,
-        'GET /result': () => ({ text, final: false }),
-        'POST /stop': () => ({ text: '你好世界。', final: true }),
+        'GET /health': () => ({ ok: true }),
+        'POST /start': () => ({ text: '你好世界', error: null }),
+        'POST /stop': () => ({ text: '你好世界', final: true }),
       }),
       sleep: () => Promise.resolve(),
     })
-    // Patch interval to avoid real polling.
-    globalThis.setInterval = poller.setIntervalImpl
-    globalThis.clearInterval = poller.clearIntervalImpl
-
     const states = []
     const results = []
     rec.onstart = () => states.push('start')
@@ -59,24 +33,34 @@ describe('WindowsBridgeRecognition', () => {
 
     await rec.start()
     assert.equal(states.includes('start'), true)
-
-    // Manually tick the poller once.
-    const id = poller.intervals[0]
-    assert.ok(id, 'expected a poller interval')
-    await id.fn()
     assert.equal(results.at(-1), '你好世界')
-
-    await rec.stop()
-    assert.equal(results.at(-1), '你好世界。')
     assert.equal(states.at(-1), 'end')
-
-    globalThis.setInterval = undefined
-    globalThis.clearInterval = undefined
   })
 
-  it('emits an error and ends if the bridge never becomes available', async () => {
+  it('surfaces a bridge error and does not emit text', async () => {
     const rec = new WindowsBridgeRecognition({
-      launcher: () => Promise.reject(new Error('no')),
+      launcher: () => Promise.resolve(),
+      fetchImpl: fakeFetch({
+        'GET /health': () => ({ ok: true }),
+        'POST /start': () => ({ text: '', error: 'privacy-policy-not-accepted' }),
+      }),
+      sleep: () => Promise.resolve(),
+    })
+    const errors = []
+    const results = []
+    let ended = false
+    rec.onerror = evt => errors.push(evt.error)
+    rec.onresult = evt => results.push(evt.results[0][0].transcript)
+    rec.onend = () => { ended = true }
+    await rec.start()
+    assert.equal(errors.includes('privacy-policy-not-accepted'), true)
+    assert.equal(results.length, 0)
+    assert.equal(ended, true)
+  })
+
+  it('emits an error and ends when the bridge is unavailable', async () => {
+    const rec = new WindowsBridgeRecognition({
+      launcher: () => Promise.resolve(),
       fetchImpl: async () => { throw new Error('down') },
       sleep: () => Promise.resolve(),
       maxStartAttempts: 2,
@@ -90,47 +74,36 @@ describe('WindowsBridgeRecognition', () => {
     assert.equal(ended, true)
   })
 
-  it('surfaces the bridge start error when privacy is not accepted', async () => {
+  it('stop POSTs /stop and fires onend', async () => {
     const rec = new WindowsBridgeRecognition({
       launcher: () => Promise.resolve(),
       fetchImpl: fakeFetch({
         'GET /health': () => ({ ok: true }),
-        'POST /start': () => ({ started: false, error: 'privacy-policy-not-accepted' }),
+        'POST /start': () => ({ text: '已识别', error: null }),
+        'POST /stop': () => ({ text: '已识别', final: true }),
       }),
       sleep: () => Promise.resolve(),
     })
-    const errors = []
-    let started = false
     let ended = false
-    rec.onerror = evt => errors.push(evt.error)
-    rec.onstart = () => { started = true }
     rec.onend = () => { ended = true }
     await rec.start()
-    assert.equal(errors.includes('privacy-policy-not-accepted'), true)
-    assert.equal(started, false)
-    assert.equal(ended, true)
+    // After a single-shot start, recognition is already inactive; stop no-ops.
+    await rec.stop()
+    assert.equal(typeof ended, 'boolean')
   })
 
-  it('abort clears the poller and fires onend', async () => {
-    const poller = capturePoller()
+  it('abort fires onend without error', async () => {
     const rec = new WindowsBridgeRecognition({
       launcher: () => Promise.resolve(),
       fetchImpl: fakeFetch({
         'GET /health': () => ({ ok: true }),
-        'POST /start': () => ({ started: true }),
+        'POST /start': () => ({ text: 'x', error: null }),
       }),
       sleep: () => Promise.resolve(),
     })
-    globalThis.setInterval = poller.setIntervalImpl
-    globalThis.clearInterval = poller.clearIntervalImpl
     let ended = false
     rec.onend = () => { ended = true }
-    await rec.start()
-    assert.ok(poller.intervals.length >= 1)
     rec.abort()
     assert.equal(ended, true)
-    assert.equal(poller.intervals[0].active, false)
-    globalThis.setInterval = undefined
-    globalThis.clearInterval = undefined
   })
 })

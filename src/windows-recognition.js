@@ -5,8 +5,10 @@
  * SpeechInputButton work unchanged whether the recognizer is the browser's
  * webkitSpeechRecognition or this Windows-backed one.
  *
- * In China (no Google reachable) Chrome's webkitSpeechRecognition cannot reach
- * its online endpoint, so clients may prefer this bridge on Windows.
+ * The bridge uses a single-shot RecognizeAsync pass: calling start() sends
+ * POST /start (which blocks until one utterance is transcribed), then emits the
+ * returned text as a final onresult. This is reliable across Windows versions
+ * and does not depend on continuous-session event wiring.
  */
 import { createWindowsEngineBridge } from './bridge-client.js'
 
@@ -15,7 +17,7 @@ export class WindowsBridgeRecognition {
     this.bridge = createWindowsEngineBridge({ baseUrl, fetchImpl, sleep })
     this.launcher = launcher
     this.continuous = true
-    this.interimResults = true
+    this.interimResults = false
     this.lang = ''
     this.onstart = null
     this.onend = null
@@ -23,7 +25,6 @@ export class WindowsBridgeRecognition {
     this.onerror = null
     this.onspeechstart = null
     this.onspeechend = null
-    this._poller = null
     this._active = false
     this._generation = 0
   }
@@ -41,34 +42,20 @@ export class WindowsBridgeRecognition {
       this.onend?.()
       return
     }
-    // The bridge can start its listener but still fail to begin recognition
-    // (e.g. the speech privacy policy was not accepted). Surface that so the
-    // UI shows an actionable message instead of silently staying idle.
-    if (payload?.error || payload?.started === false) {
+    // The bridge returns { text, error } after a single recognition pass.
+    if (payload?.error) {
       this._active = false
-      this.onerror?.({ error: payload?.error || 'start-failed' })
+      this.onerror?.({ error: payload.error })
       this.onend?.()
       return
     }
     this.onstart?.()
-    this._poll(generation)
-  }
-
-  _poll(generation) {
-    if (!this._active || generation !== this._generation) return
-    this._poller = setInterval(async () => {
-      if (!this._active || generation !== this._generation) return
-      let payload
-      try {
-        payload = await this.bridge.result()
-      } catch {
-        return
-      }
-      const { text, final } = payload ?? {}
-      if (typeof text === 'string' && text !== '') {
-        this._emitResult(text, final === true)
-      }
-    }, 160)
+    const text = typeof payload?.text === 'string' ? payload.text : ''
+    if (text !== '') {
+      this._emitResult(text, true)
+    }
+    this._active = false
+    this.onend?.()
   }
 
   _emitResult(transcript, isFinal) {
@@ -80,8 +67,7 @@ export class WindowsBridgeRecognition {
   async stop() {
     if (!this._active) return
     this._active = false
-    const generation = ++this._generation
-    if (this._poller) { clearInterval(this._poller); this._poller = null }
+    this._generation += 1
     try {
       const final = await this.bridge.stop()
       if (final?.text) this._emitResult(final.text, true)
@@ -94,7 +80,6 @@ export class WindowsBridgeRecognition {
   abort() {
     this._active = false
     this._generation += 1
-    if (this._poller) { clearInterval(this._poller); this._poller = null }
     this.onend?.()
   }
 }

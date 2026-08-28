@@ -96,9 +96,21 @@ export async function apply(ctx) {
       webServer.register({
         kind: 'exact',
         path: '/dsh-speech-input/bridge/status',
-        handler(req, res) {
+        async handler(req, res) {
           const running = Boolean(bridgeChild && bridgeChild.exitCode === null)
-          sendJson(res, 200, { running, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE })
+          // Surface the bridge's own recognition state/error (privacy gate,
+          // no audio device, etc.) so it can be diagnosed without reaching the
+          // bridge directly.
+          let bridgeState = null
+          if (running) {
+            try {
+              const health = await fetch(`${BRIDGE_BASE}/health`, { cache: 'no-store' })
+              bridgeState = await health.json()
+            } catch (error) {
+              bridgeState = { reachable: false, error: String(error?.message ?? 'unreachable') }
+            }
+          }
+          sendJson(res, 200, { running, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE, bridge: bridgeState })
         },
       }),
     ]

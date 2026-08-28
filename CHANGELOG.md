@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.5] - 2026-08-27
+
+### Changed
+
+- The Windows bridge now uses a single-shot `RecognizeAsync` pass (instead of the
+  continuous-session event wiring), returning the recognized text directly from
+  `/start`. This is more reliable across Windows versions and does not depend on
+  continuous-session `ResultGenerated`/`HypothesisGenerated` event handlers
+  firing. The client adapter reads the text from `/start` and emits it as a final
+  result.
+- `/dsh-speech-input/bridge/status` now also reports the bridge's own error
+  (e.g. speech-privacy gate) so failures can be diagnosed.
+
 ## [0.1.4] - 2026-08-27
 
 ### Fixed
@@ -53,6 +66,7 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.1.5]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.5
 [0.1.4]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.4
 [0.1.3]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.3
 [0.1.2]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.2
