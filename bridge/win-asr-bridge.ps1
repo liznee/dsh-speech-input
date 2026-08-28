@@ -52,6 +52,7 @@ $CurrentText = ''
 $CurrentFinal = $true
 $RecognitionStarted = $false
 $Recognizer = $null
+$LastError = $null
 
 function New-Recognizer {
   $langType = [Type]::GetType('Windows.Globalization.Language, Windows.Globalization, ContentType=WindowsRuntime')
@@ -95,6 +96,7 @@ function New-Recognizer {
 }
 
 function Start-Recognition {
+  $script:LastError = $null
   if ($null -eq $script:Recognizer) {
     New-Recognizer | Out-Null
   }
@@ -104,16 +106,38 @@ function Start-Recognition {
   try {
     $null = Await-WinRT $script:Recognizer.TrySetSystemSpeechLanguageAsync($lang) ([bool])
   } catch {}
-  $compType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionCompilationResult, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
-  $compiled = Await-WinRT $script:Recognizer.CompileConstraintsAsync() ($compType)
-  if ($compiled.Status -ne 'Success') {
-    Write-Output "ERR_COMPILE: $($compiled.Status)"
-    return
+  # Prefer a local dictation constraint (offline-friendly). CompileConstraintsAsync
+  # succeeds even without it, but the constraint makes the engine use the local
+  # language model rather than the online transcription path.
+  try {
+    $cons = $script:Recognizer.Constraints
+    $scenType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionScenario, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
+    $topicType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionTopicConstraint, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
+    $dictation = [Enum]::Parse($scenType, 'Dictation')
+    $constraint = [Activator]::CreateInstance($topicType, @($dictation, 'dictation'))
+    $append = $cons.GetType().GetMethod('Append')
+    if ($null -eq $append) { $append = $cons.GetType().GetMethods() | Where-Object { $_.Name -eq 'Append' } | Select-Object -First 1 }
+    if ($null -ne $append) { $append.Invoke($cons, @($constraint)) | Out-Null }
+  } catch {}
+  try {
+    $compType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionCompilationResult, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
+    $compiled = Await-WinRT $script:Recognizer.CompileConstraintsAsync() ($compType)
+    if ($compiled.Status -ne 'Success') {
+      $script:LastError = "compile-failed:$($compiled.Status)"
+      Write-Output "ERR_COMPILE: $($compiled.Status)"
+      return
+    }
+    $session = $script:Recognizer.ContinuousRecognitionSession
+    Await-Action $session.StartAsync()
+    $script:RecognitionStarted = $true
+    Write-Output "recognized_started"
+  } catch {
+    # Recognizer could not start (e.g. the speech privacy policy was not
+    # accepted, or no mic/audio input device). Surface a clear, actionable error.
+    $message = $_.Exception.Message
+    $script:LastError = if ($message -match 'privacy policy') { 'privacy-policy-not-accepted' } else { $message }
+    Write-Output "ERR_START: $($_.Exception.GetType().Name): $message"
   }
-  $session = $script:Recognizer.ContinuousRecognitionSession
-  Await-Action $session.StartAsync()
-  $script:RecognitionStarted = $true
-  Write-Output "recognized_started"
 }
 
 function Stop-Recognition {
@@ -179,14 +203,14 @@ while ($listener.IsListening) {
     }
 
     if ($path -eq '/health') {
-      Send-Json $res 200 @{ ok = $true; started = $RecognitionStarted }
+      Send-Json $res 200 @{ ok = $true; started = $RecognitionStarted; error = $script:LastError }
     }
     elseif ($path -eq '/start') {
       Start-Recognition
-      Send-Json $res 200 @{ started = $RecognitionStarted }
+      Send-Json $res 200 @{ started = $RecognitionStarted; error = $script:LastError }
     }
     elseif ($path -eq '/result') {
-      Send-Json $res 200 @{ text = $CurrentText; final = $CurrentFinal }
+      Send-Json $res 200 @{ text = $CurrentText; final = $CurrentFinal; error = $script:LastError }
     }
     elseif ($path -eq '/stop') {
       Stop-Recognition
