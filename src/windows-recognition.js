@@ -2,26 +2,24 @@
  * A browser-agnostic SpeechRecognition-shaped object backed by the Windows
  * engine bridge, via the DSH host's same-origin route. The browser never talks
  * to the bridge (127.0.0.1:8765) directly — that would be cross-origin and is
- * the source of the "no response" failures. Instead it talks to the plugin's
+ * the source of the "no response" failures. Instead it calls the plugin's
  * same-origin host routes:
- *   POST /dsh-speech-input/bridge/start   -> start continuous recognition
- *   POST /dsh-speech-input/bridge/result  -> read accumulated text
- *   POST /dsh-speech-input/bridge/stop    -> stop recognition
+ *   POST /dsh-speech-input/bridge/start   -> one recognition pass -> { text, error }
+ *   POST /dsh-speech-input/bridge/stop    -> stop
  *
  * VoiceRecognitionController treats recognizers as synchronous, event-driven
- * objects. We fire onstart synchronously (so the button leaves "starting"),
- * start the continuous session, then poll /result and emit onresult for any
- * newly accumulated text, exactly like a streaming recognizer.
+ * objects. We fire onstart synchronously (so the button leaves "starting"), then
+ * POST /start (blocking single-shot recognition) and emit the returned text as a
+ * final onresult.
  */
 export class WindowsBridgeRecognition {
-  constructor({ startEndpoint = '/dsh-speech-input/bridge/start', resultEndpoint = '/dsh-speech-input/bridge/result', stopEndpoint = '/dsh-speech-input/bridge/stop', fetchImpl, sleep } = {}) {
+  constructor({ startEndpoint = '/dsh-speech-input/bridge/start', stopEndpoint = '/dsh-speech-input/bridge/stop', fetchImpl, sleep } = {}) {
     this.startEndpoint = startEndpoint
-    this.resultEndpoint = resultEndpoint
     this.stopEndpoint = stopEndpoint
     this.fetchImpl = fetchImpl || ((url, opts) => fetch(url, opts))
     this.sleep = sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)))
     this.continuous = true
-    this.interimResults = true
+    this.interimResults = false
     this.lang = ''
     this.onstart = null
     this.onend = null
@@ -29,8 +27,6 @@ export class WindowsBridgeRecognition {
     this.onerror = null
     this._active = false
     this._generation = 0
-    this._poller = null
-    this._lastText = ''
   }
 
   async _post(endpoint) {
@@ -45,50 +41,32 @@ export class WindowsBridgeRecognition {
     const generation = ++this._generation
     // Fire onstart synchronously so the controller leaves "starting".
     this.onstart?.()
-    void this._begin(generation)
+    void this._run(generation)
   }
 
-  async _begin(generation) {
+  async _run(generation) {
     let payload
     try {
       payload = await this._post(this.startEndpoint)
     } catch (error) {
       if (generation !== this._generation) return
-      this._finishError(error?.message?.includes('unavailable') ? 'bridge-unavailable' : 'start-failed')
+      this._finish(error?.message?.includes('unavailable') ? 'bridge-unavailable' : 'start-failed')
       return
     }
     if (generation !== this._generation) return
     if (payload?.error) {
-      this._finishError(payload.error)
-      return
-    }
-    this._poller = setInterval(() => { void this._poll(generation) }, 160)
-  }
-
-  async _poll(generation) {
-    if (!this._active || generation !== this._generation) return
-    let payload
-    try {
-      payload = await this._post(this.resultEndpoint)
-    } catch {
-      return
-    }
-    if (generation !== this._generation) return
-    if (payload?.error) {
-      this._finishError(payload.error)
+      this._finish(payload.error)
       return
     }
     const text = typeof payload?.text === 'string' ? payload.text : ''
-    if (text !== '' && text !== this._lastText) {
-      this._lastText = text
-      this._emitResult(text, true)
-    }
+    if (text !== '') this._emitResult(text, true)
+    this._active = false
+    this.onend?.()
   }
 
-  _finishError(error) {
+  _finish(error) {
     this._active = false
     this._generation += 1
-    if (this._poller) { clearInterval(this._poller); this._poller = null }
     this.onerror?.({ error })
     this.onend?.()
   }
@@ -103,7 +81,6 @@ export class WindowsBridgeRecognition {
     if (!this._active) { this.onend?.(); return }
     this._active = false
     this._generation += 1
-    if (this._poller) { clearInterval(this._poller); this._poller = null }
     void this._post(this.stopEndpoint).catch(() => {})
     this.onend?.()
   }
@@ -111,7 +88,6 @@ export class WindowsBridgeRecognition {
   abort() {
     this._active = false
     this._generation += 1
-    if (this._poller) { clearInterval(this._poller); this._poller = null }
     this.onend?.()
   }
 }

@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.9] - 2026-08-27
+
+### Fixed
+
+- **Fix the "no transcription" root cause**: the bridge used a
+  `Windows.Foundation.TypedEventHandler[...]` delegate for continuous
+  recognition, which PowerShell cannot resolve — the bridge returned
+  "找不到类型 [Windows.Foundation.TypedEventHandler]" and never started
+  recognition. The bridge now uses single-shot
+  `SpeechRecognizer.RecognizeAsync` (no event delegate), so it works in
+  PowerShell. Also clears any stale bridge process squatting on the bridge port
+  so the host can spawn a fresh one.
+
 ## [0.1.8] - 2026-08-27
 
 ### Changed
@@ -100,6 +113,7 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.1.9]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.9
 [0.1.8]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.8
 [0.1.7]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.7
 [0.1.6]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.6
