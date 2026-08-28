@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.4] - 2026-08-27
+
+### Fixed
+
+- The host half now declares `webServer` in its `inject`, so the bridge launch
+  routes (`/dsh-speech-input/bridge/start|stop|status`) actually register. The
+  bridge previously could not be started because the DSH host did not inject the
+  `webServer` service into the plugin context.
+
 ## [0.1.3] - 2026-08-27
 
 ### Fixed
@@ -44,6 +53,7 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.1.4]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.4
 [0.1.3]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.3
 [0.1.2]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.2
 [0.1.1]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.1

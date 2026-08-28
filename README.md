@@ -36,25 +36,25 @@
 
 ### 安装
 
-`v0.1.3` 已在 DeepSeek Harness `0.1.1-rc.1` 上验证。当前 Harness 需要 Node.js `22.19+` 或 `24+`。
+`v0.1.4` 已在 DeepSeek Harness `0.1.1-rc.1` 上验证。当前 Harness 需要 Node.js `22.19+` 或 `24+`。
 
 从 npm Registry 安装固定版本：
 
 ```sh
-dsh plugin --profile web add dsh-speech-input@0.1.3
+dsh plugin --profile web add dsh-speech-input@0.1.4
 ```
 
 也可以安装对应的 GitHub Release：
 
 ```sh
-dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.3
+dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.4
 ```
 
 仓库已提交预构建的 `lib/`，Git 安装不会执行构建脚本，也不需要在
 `pnpm-workspace.yaml` 中授权 `allowBuilds`。安装后运行
 `dsh --profile web --dump-config`，输出中应出现 `# == dsh-speech-input`；随后重启 `dsh web`。
 
-升级时，将上述安装命令中的 `0.1.3` 替换为准备安装的新版本。卸载命令：
+升级时，将上述安装命令中的 `0.1.4` 替换为准备安装的新版本。卸载命令：
 
 ```sh
 dsh plugin --profile web remove dsh-speech-input
@@ -66,7 +66,7 @@ dsh plugin --profile web remove dsh-speech-input
 npm ci
 npm test
 npm pack
-dsh plugin --profile web add ./dsh-speech-input-0.1.3.tgz
+dsh plugin --profile web add ./dsh-speech-input-0.1.4.tgz
 ```
 
 ### 隐私
@@ -105,13 +105,13 @@ It uses the public `conversation.input.right`, `inputActions.setDraft()`, and co
 Install the fixed npm release:
 
 ```sh
-dsh plugin --profile web add dsh-speech-input@0.1.3
+dsh plugin --profile web add dsh-speech-input@0.1.4
 ```
 
 Or install the matching GitHub Release:
 
 ```sh
-dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.3
+dsh plugin --profile web add github:liznee/dsh-speech-input#v0.1.4
 ```
 
 Prebuilt `lib/` artifacts are committed, so Git installation does not execute a build script or require a pnpm `allowBuilds` grant. Run `dsh --profile web --dump-config` to verify the layer, then restart `dsh web`.
