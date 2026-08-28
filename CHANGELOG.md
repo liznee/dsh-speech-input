@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.6] - 2026-08-27
+
+### Changed
+
+- **Fix the "no transcription" root cause**: the browser no longer talks to the
+  bridge at `127.0.0.1:8765` directly (cross-origin, which hung in Chrome). The
+  browser now POSTs to the same-origin host route
+  `/dsh-speech-input/bridge/recognize`, and the host spawns the bridge, runs one
+  recognition pass, and returns `{ text, error }`. This removes the cross-origin
+  failure that produced no response.
+
 ## [0.1.5] - 2026-08-27
 
 ### Changed
@@ -66,6 +77,7 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.1.6]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.6
 [0.1.5]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.5
 [0.1.4]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.4
 [0.1.3]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.3

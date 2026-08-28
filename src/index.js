@@ -2,19 +2,22 @@
  * Host half of dsh-speech-input.
  *
  * The browser bundle (src/client/index.js) owns the voice-input UI. This host
- * half exposes the on-demand launcher for the Windows speech bridge so the
- * client can start/stop the bridge without a long-lived background process.
+ * half performs the actual Windows speech recognition by proxying to the
+ * on-demand bridge (bridge/win-asr-bridge.ps1).
  *
- * The bridge (bridge/win-asr-bridge.ps1) is spawned only when the client asks
- * to start recognition, and it exits on /stop or an idle timeout, so nothing
- * lingers between uses.
+ * The browser talks only to the same-origin DSH web server (127.0.0.1:3080) so
+ * there is no cross-origin access to the bridge at 127.0.0.1:8765:
+ *   POST /dsh-speech-input/bridge/recognize -> spawn bridge, run one
+ *        recognition pass, return { text, error }
+ *   POST /dsh-speech-input/bridge/stop      -> stop the bridge
+ *   GET  /dsh-speech-input/bridge/status    -> status (+ bridge health/error)
+ *
+ * The bridge is spawned only when recognition is requested and exits on /stop or
+ * after an idle timeout, so it never lingers in the background.
  */
 import { spawn } from 'node:child_process'
 
 export const name = 'dsh-speech-input'
-// Declare the services this host half depends on. Declaring `webServer` is what
-// makes ctx.webServer available inside apply(); without it the bridge routes
-// would not register.
 export const inject = ['webServer']
 
 const BRIDGE_PORT = 8765
@@ -22,14 +25,11 @@ const BRIDGE_BASE = `http://127.0.0.1:${BRIDGE_PORT}`
 
 let bridgeChild = null
 
-/** Path to the bridge PowerShell script shipped with this package. */
 function bridgeScriptPath() {
   const url = new URL('../bridge/win-asr-bridge.ps1', import.meta.url)
-  // file:///C:/... -> C:/...
   return url.pathname.replace(/^\/([A-Za-z]:)/, '$1')
 }
 
-/** Spawn the bridge on demand if it is not already running. */
 function ensureBridge() {
   if (bridgeChild && bridgeChild.exitCode === null) return true
   const script = bridgeScriptPath()
@@ -46,7 +46,6 @@ function ensureBridge() {
   return true
 }
 
-/** Stop the bridge if it is running. */
 function stopBridge() {
   if (bridgeChild && bridgeChild.exitCode === null) {
     bridgeChild.kill()
@@ -62,24 +61,43 @@ function sendJson(res, status, payload) {
   res.end(body)
 }
 
+/** Proxy one recognition pass to the bridge; returns { text, error }. */
+async function recognize() {
+  ensureBridge()
+  // Wait (bounded) for the bridge to accept a connection, then ask it to run a
+  // single recognition pass (POST /start blocks until one utterance is done).
+  let lastError = null
+  for (let i = 0; i < 30; i += 1) {
+    try {
+      const start = await fetch(`${BRIDGE_BASE}/start`, { method: 'POST', cache: 'no-store' })
+      const body = await start.json()
+      return { text: typeof body.text === 'string' ? body.text : '', error: body.error ?? null }
+    } catch (error) {
+      lastError = String(error?.message ?? 'bridge not ready')
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+  }
+  return { text: '', error: lastError || 'bridge-unavailable' }
+}
+
 export async function apply(ctx) {
   await ctx.effect(async () => {
     const webServer = ctx.webServer
     const disposers = [
-      // POST /dsh-speech-input/bridge/start -> spawn the bridge on demand.
+      // POST /dsh-speech-input/bridge/recognize
       webServer.register({
         kind: 'exact',
-        path: '/dsh-speech-input/bridge/start',
-        handler(req, res) {
+        path: '/dsh-speech-input/bridge/recognize',
+        async handler(req, res) {
           if (req.method !== 'POST') {
             sendJson(res, 405, { error: 'method_not_allowed' })
             return
           }
-          ensureBridge()
-          sendJson(res, 200, { started: true, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE })
+          const result = await recognize()
+          sendJson(res, 200, result)
         },
       }),
-      // POST /dsh-speech-input/bridge/stop -> stop the bridge.
+      // POST /dsh-speech-input/bridge/stop
       webServer.register({
         kind: 'exact',
         path: '/dsh-speech-input/bridge/stop',
@@ -96,21 +114,22 @@ export async function apply(ctx) {
       webServer.register({
         kind: 'exact',
         path: '/dsh-speech-input/bridge/status',
-        async handler(req, res) {
+        handler(req, res) {
           const running = Boolean(bridgeChild && bridgeChild.exitCode === null)
-          // Surface the bridge's own recognition state/error (privacy gate,
-          // no audio device, etc.) so it can be diagnosed without reaching the
-          // bridge directly.
-          let bridgeState = null
-          if (running) {
-            try {
-              const health = await fetch(`${BRIDGE_BASE}/health`, { cache: 'no-store' })
-              bridgeState = await health.json()
-            } catch (error) {
-              bridgeState = { reachable: false, error: String(error?.message ?? 'unreachable') }
-            }
+          sendJson(res, 200, { running, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE })
+        },
+      }),
+      // Keep the legacy /bridge/start healthy for anyone still calling it.
+      webServer.register({
+        kind: 'exact',
+        path: '/dsh-speech-input/bridge/start',
+        handler(req, res) {
+          if (req.method !== 'POST') {
+            sendJson(res, 405, { error: 'method_not_allowed' })
+            return
           }
-          sendJson(res, 200, { running, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE, bridge: bridgeState })
+          ensureBridge()
+          sendJson(res, 200, { started: true, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE })
         },
       }),
     ]

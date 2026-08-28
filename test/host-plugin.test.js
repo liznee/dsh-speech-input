@@ -30,20 +30,20 @@ describe('host plugin bridge routes', () => {
     assert.equal(inject.includes('webServer'), true)
   })
 
-  it('registers /start, /stop, /status routes when webServer is available', async () => {
+  it('registers recognize/stop/status/start routes when webServer is available', async () => {
     const ctx = await makeCtx()
     await apply(ctx)
     const paths = ctx.routes.map(r => r.path)
     assert.deepEqual(paths, [
-      '/dsh-speech-input/bridge/start',
+      '/dsh-speech-input/bridge/recognize',
       '/dsh-speech-input/bridge/stop',
       '/dsh-speech-input/bridge/status',
+      '/dsh-speech-input/bridge/start',
     ])
     assert.equal(ctx.routes.every(r => r.kind === 'exact'), true)
     assert.equal(typeof ctx.routes[0].handler, 'function')
-    // handler sends 405 for non-POST on /start
-    const startHandler = ctx.routes.find(r => r.path === '/dsh-speech-input/bridge/start').handler
-    assert.equal(typeof startHandler, 'function')
+    const recognizeHandler = ctx.routes.find(r => r.path === '/dsh-speech-input/bridge/recognize').handler
+    assert.equal(typeof recognizeHandler, 'function')
   })
 
   it('installs a bridge-runtime effect when webServer is available', async () => {

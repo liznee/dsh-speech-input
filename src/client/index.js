@@ -394,8 +394,9 @@ export const inject = ['slots', 'locale', 'conversation']
 // to start and it exits on stop. Falls back to Web Speech where the bridge is
 // not configured or unavailable.
 function windowsCreateRecognition() {
-  const launcher = () => fetch('/dsh-speech-input/bridge/start', { method: 'POST' })
-  return createWindowsRecognition({ launcher })
+  // Same-origin host route (no cross-origin to 127.0.0.1:8765); the host spawns
+  // the bridge and returns { text, error }.
+  return createWindowsRecognition({})
 }
 export function apply(ctx) {
   // Prefer the Windows engine bridge so the mic works in China/offline; the

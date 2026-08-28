@@ -1,21 +1,20 @@
 /**
  * A browser-agnostic SpeechRecognition-shaped object backed by the Windows
- * engine bridge (bridge/win-asr-bridge.ps1). It mimics the subset of the Web
- * Speech API that VoiceRecognitionController consumes, so the controller and
- * SpeechInputButton work unchanged whether the recognizer is the browser's
- * webkitSpeechRecognition or this Windows-backed one.
+ * engine bridge, via the DSH host's same-origin route. The browser never talks
+ * to the bridge (127.0.0.1:8765) directly — that would be cross-origin and is
+ * the source of the "no response" failures. Instead it POSTs to the plugin's
+ * same-origin host route /dsh-speech-input/bridge/recognize, and the host
+ * spawns the bridge, runs one recognition pass, and returns { text, error }.
  *
- * The bridge uses a single-shot RecognizeAsync pass: calling start() sends
- * POST /start (which blocks until one utterance is transcribed), then emits the
- * returned text as a final onresult. This is reliable across Windows versions
- * and does not depend on continuous-session event wiring.
+ * The returned text is emitted as a final onresult, so VoiceRecognitionController
+ * and SpeechInputButton work unchanged.
  */
-import { createWindowsEngineBridge } from './bridge-client.js'
-
 export class WindowsBridgeRecognition {
-  constructor({ launcher, baseUrl, fetchImpl, sleep } = {}) {
-    this.bridge = createWindowsEngineBridge({ baseUrl, fetchImpl, sleep })
-    this.launcher = launcher
+  constructor({ endpoint = '/dsh-speech-input/bridge/recognize', stopEndpoint = '/dsh-speech-input/bridge/stop', fetchImpl, sleep } = {}) {
+    this.endpoint = endpoint
+    this.stopEndpoint = stopEndpoint
+    this.fetchImpl = fetchImpl || ((url, opts) => fetch(url, opts))
+    this.sleep = sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)))
     this.continuous = true
     this.interimResults = false
     this.lang = ''
@@ -23,10 +22,16 @@ export class WindowsBridgeRecognition {
     this.onend = null
     this.onresult = null
     this.onerror = null
-    this.onspeechstart = null
-    this.onspeechend = null
     this._active = false
     this._generation = 0
+  }
+
+  async _post(endpoint) {
+    const res = await this.fetchImpl(endpoint, { method: 'POST' })
+    if (!res.ok) {
+      throw new Error(`bridge request failed (${res.status})`)
+    }
+    return res.json()
   }
 
   async start() {
@@ -35,14 +40,13 @@ export class WindowsBridgeRecognition {
     const generation = ++this._generation
     let payload
     try {
-      payload = await this.bridge.start(this.launcher)
+      payload = await this._post(this.endpoint)
     } catch (error) {
       this._active = false
-      this.onerror?.({ error: error?.message === 'bridge-unavailable' ? 'bridge-unavailable' : 'start-failed' })
+      this.onerror?.({ error: error?.message?.includes('unavailable') ? 'bridge-unavailable' : 'start-failed' })
       this.onend?.()
       return
     }
-    // The bridge returns { text, error } after a single recognition pass.
     if (payload?.error) {
       this._active = false
       this.onerror?.({ error: payload.error })
@@ -65,12 +69,11 @@ export class WindowsBridgeRecognition {
   }
 
   async stop() {
-    if (!this._active) return
+    if (!this._active) { this.onend?.(); return }
     this._active = false
     this._generation += 1
     try {
-      const final = await this.bridge.stop()
-      if (final?.text) this._emitResult(final.text, true)
+      await this._post(this.stopEndpoint)
     } catch {
       /* ignore */
     }
@@ -84,9 +87,8 @@ export class WindowsBridgeRecognition {
   }
 }
 
-/** Build a WindowsBridgeRecognition if we're on Windows with a launcher available. */
+/** Build a WindowsBridgeRecognition (always available; recognition is host-backed). */
 export function createWindowsRecognition(options) {
-  if (typeof setInterval === 'undefined') return null
   return new WindowsBridgeRecognition(options)
 }
 
