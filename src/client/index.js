@@ -1,9 +1,19 @@
 import React from 'react'
 import { createBrowserMicrophoneLevelMeter } from '../audio-level.js'
 import { VoiceRecognitionController } from '../core.js'
+import { createWindowsRecognition } from '../windows-recognition.js'
 
 const NS = 'speech-input'
 const WAVEFORM_SEGMENTS = 24
+
+// The plugin's apply() may configure a preferred recognition source (the
+// Windows engine bridge) so the mic keeps working in China/offline where the
+// browser Web Speech service is unreachable. Populated at load time.
+let preferredRecognitionFactory = null
+
+export function __setPreferredRecognition(factory) {
+  preferredRecognitionFactory = factory ?? null
+}
 
 function emptyWaveform() {
   return Array.from({ length: WAVEFORM_SEGMENTS }, () => 0)
@@ -222,6 +232,7 @@ function CancelIcon() {
 
 export function SpeechInputButton({
   createMeter = createBrowserMicrophoneLevelMeter,
+  createRecognition,
   input,
   inputActions,
   setComposerBlocked,
@@ -234,7 +245,7 @@ export function SpeechInputButton({
   const [waveformLevels, setWaveformLevels] = React.useState(emptyWaveform)
   const controller = React.useRef(null)
   const levelMeter = React.useRef(null)
-  const supported = speechConstructor() !== null
+  const supported = createRecognition || preferredRecognitionFactory ? true : speechConstructor() !== null
   const busy = input?.phase !== 'plain'
 
   const recordLevel = React.useCallback(value => {
@@ -252,6 +263,13 @@ export function SpeechInputButton({
     if (controller.current !== null) return controller.current
     controller.current = new VoiceRecognitionController({
       createRecognition: () => {
+        // Preferred provider wins (Windows engine bridge, configured by apply);
+        // otherwise fall back to the browser's Web Speech when available.
+        if (preferredRecognitionFactory) {
+          const recognition = preferredRecognitionFactory()
+          if (recognition) return recognition
+        }
+        if (createRecognition) return createRecognition()
         const Recognition = speechConstructor()
         return Recognition === null ? null : new Recognition()
       },
@@ -264,7 +282,7 @@ export function SpeechInputButton({
       punctuation: () => 'smart',
     })
     return controller.current
-  }, [])
+  }, [createRecognition])
 
   React.useEffect(() => () => {
     mounted.current = false
@@ -369,7 +387,19 @@ export function SpeechInputButton({
 
 export const inject = ['slots', 'locale', 'conversation']
 
+// On Windows, prefer the local engine bridge (works in China with no Google
+// reachable). The bridge is launched on demand by the host half; we just ask it
+// to start and it exits on stop. Falls back to Web Speech where the bridge is
+// not configured or unavailable.
+function windowsCreateRecognition() {
+  const launcher = () => fetch('/dsh-speech-input/bridge/start', { method: 'POST' })
+  return createWindowsRecognition({ launcher })
+}
 export function apply(ctx) {
+  // Prefer the Windows engine bridge so the mic works in China/offline; the
+  // SpeechInputButton still falls back to Web Speech where the bridge is not
+  // configured or is unavailable.
+  __setPreferredRecognition(windowsCreateRecognition)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-speech-input: dictionaries')
   ctx.effect(installStyles, 'dsh-speech-input: styles')
   ctx.slots.inject('conversation.input.right', () => ctx.slots.register({
