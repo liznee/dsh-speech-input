@@ -2,16 +2,15 @@
 # On-demand Windows speech recognition bridge for the dsh-speech-input plugin.
 #
 # HTTP server on 127.0.0.1:<port>:
-#   GET  /health         -> { ok, running }
-#   POST /start          -> runs ONE recognition pass (speaks -> text), returns { text, error }
-#   GET  /result         -> { text, error }  (the last recognized text)
-#   POST /stop           -> returns final { text }, then the process exits.
+#   GET  /health         -> { ok, running, error, text }
+#   POST /start          -> begin CONTINUOUS recognition (zh-Hans-CN), { started }
+#   GET  /result         -> { text, error, running }
+#   POST /stop           -> stop recognition, { text }  (process exits)
 #
-# Recognition uses a single-shot Windows.Media.SpeechRecognition.RecognizeAsync
-# pass (reliable across Windows versions); the /start handler blocks while
-# listening, then returns the recognized text. The client POSTs /start, reads the
-# returned text, and later POSTs /stop to shut the process down. The process also
-# exits on an idle timeout so it never lingers in the background.
+# Recognition uses Windows.Media.SpeechRecognition ContinuousRecognitionSession so
+# text accumulates as the user keeps speaking (like Win+H). The /start handler is
+# non-blocking: it starts the session and returns immediately; the HTTP loop keeps
+# serving /result while recognition runs, and the process exits on /stop or idle.
 #
 # Requirements: Windows 10/11 with a Chinese (Simplified) speech language pack
 # installed (zh-Hans-CN), and the speech privacy policy accepted in the
@@ -28,9 +27,12 @@ try { Add-Type -AssemblyName 'System.Runtime.WindowsRuntime' -ErrorAction Stop }
   exit 1
 }
 
-# --- WinRT await helper -------------------------------------------------------
+# --- WinRT await helpers ------------------------------------------------------
 $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
   $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+})[0]
+$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction'
 })[0]
 
 function Await-WinRT($WinRtTask, $ResultType) {
@@ -40,7 +42,15 @@ function Await-WinRT($WinRtTask, $ResultType) {
   return $netTask.Result
 }
 
-$LastText = ''
+function Await-Action($WinRtAction) {
+  if ($null -eq $asTaskAction) { return }
+  $netTask = $asTaskAction.Invoke($null, @($WinRtAction))
+  $netTask.Wait(-1) | Out-Null
+}
+
+# --- Recognition state --------------------------------------------------------
+$Recognizer = $null
+$CurrentText = ''
 $LastError = $null
 $Running = $false
 
@@ -48,13 +58,11 @@ function New-Recognizer {
   $langType = [Type]::GetType('Windows.Globalization.Language, Windows.Globalization, ContentType=WindowsRuntime')
   $lang = [Activator]::CreateInstance($langType, @('zh-Hans-CN'))
   $srType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognizer, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
-  return [Activator]::CreateInstance($srType, @($lang))
-}
+  $rec = [Activator]::CreateInstance($srType, @($lang))
 
-function Recognize-Once($recognizer) {
-  # Best-effort local dictation constraint (offline-friendly); swallow failures.
+  # Best-effort local dictation constraint.
   try {
-    $cons = $recognizer.Constraints
+    $cons = $rec.Constraints
     $scenType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionScenario, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
     $topicType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionTopicConstraint, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
     $dictation = [Enum]::Parse($scenType, 'Dictation')
@@ -64,19 +72,58 @@ function Recognize-Once($recognizer) {
     if ($null -ne $append) { $append.Invoke($cons, @($constraint)) | Out-Null }
   } catch {}
 
+  return $rec
+}
+
+function Start-Recognition {
+  $script:LastError = $null
+  $script:CurrentText = ''
+  if ($null -eq $script:Recognizer) {
+    $script:Recognizer = New-Recognizer
+  }
   $langType = [Type]::GetType('Windows.Globalization.Language, Windows.Globalization, ContentType=WindowsRuntime')
   $lang = [Activator]::CreateInstance($langType, @('zh-Hans-CN'))
+  try { $null = Await-WinRT $script:Recognizer.TrySetSystemSpeechLanguageAsync($lang) ([bool]) } catch {}
   try {
-    $null = Await-WinRT $recognizer.TrySetSystemSpeechLanguageAsync($lang) ([bool])
-  } catch {}
+    $compType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionCompilationResult, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
+    $compiled = Await-WinRT $script:Recognizer.CompileConstraintsAsync() ($compType)
+    if ($compiled.Status -ne 'Success') { $script:LastError = "compile:$($compiled.Status)"; $script:Running = $false; return }
+    $session = $script:Recognizer.ContinuousRecognitionSession
+    # Accumulate recognized text.
+    $resHandler = [Windows.Foundation.TypedEventHandler[Windows.Media.SpeechRecognition.SpeechContinuousRecognitionSession, Windows.Media.SpeechRecognition.SpeechContinuousRecognitionResultGeneratedEventArgs]] {
+      param($sender, $args)
+      try {
+        $r = $args.Result
+        if ($r.Text) { $script:CurrentText = $r.Text }
+      } catch {}
+    }
+    $session.add_ResultGenerated($resHandler)
+    $hypHandler = [Windows.Foundation.TypedEventHandler[Windows.Media.SpeechRecognition.SpeechContinuousRecognitionSession, Windows.Media.SpeechRecognition.SpeechContinuousRecognitionHypothesisGeneratedEventArgs]] {
+      param($sender, $args)
+      try {
+        if ($args.Hypothesis.Text) { $script:CurrentText = $args.Hypothesis.Text }
+      } catch {}
+    }
+    $session.add_HypothesisGenerated($hypHandler)
+    Await-Action $session.StartAsync()
+    $script:Running = $true
+  } catch {
+    $msg = $_.Exception.Message
+    $script:LastError = if ($msg -match 'privacy policy') { 'privacy-policy-not-accepted' } else { $msg }
+    $script:Running = $false
+  }
+}
 
-  $compType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionCompilationResult, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
-  $compiled = Await-WinRT $recognizer.CompileConstraintsAsync() ($compType)
-  if ($compiled.Status -ne 'Success') { return '' }
-
-  $resultType = [Type]::GetType('Windows.Media.SpeechRecognition.SpeechRecognitionResult, Windows.Media.SpeechRecognition, ContentType=WindowsRuntime')
-  $result = Await-WinRT $recognizer.RecognizeAsync() ($resultType)
-  return [string]$result.Text
+function Stop-Recognition {
+  $script:Running = $false
+  if ($null -ne $script:Recognizer) {
+    try {
+      $session = $script:Recognizer.ContinuousRecognitionSession
+      Await-Action $session.StopAsync()
+    } catch {}
+    try { $script:Recognizer.Dispose() } catch {}
+    $script:Recognizer = $null
+  }
 }
 
 # --- Tiny HTTP server ----------------------------------------------------------
@@ -127,30 +174,18 @@ while ($listener.IsListening) {
     }
 
     if ($path -eq '/health') {
-      Send-Json $res 200 @{ ok = $true; running = $Running; error = $LastError }
+      Send-Json $res 200 @{ ok = $true; running = $Running; error = $LastError; text = $CurrentText }
     }
     elseif ($path -eq '/start') {
-      $Running = $true
-      $LastError = $null
-      $LastText = ''
-      $recognizer = $null
-      try {
-        $recognizer = New-Recognizer
-        $LastText = Recognize-Once $recognizer
-      } catch {
-        $msg = $_.Exception.Message
-        $LastError = if ($msg -match 'privacy policy') { 'privacy-policy-not-accepted' } else { $msg }
-      } finally {
-        if ($null -ne $recognizer) { try { $recognizer.Dispose() } catch {} }
-        $Running = $false
-      }
-      Send-Json $res 200 @{ text = $LastText; error = $LastError }
+      Start-Recognition
+      Send-Json $res 200 @{ started = $Running; error = $LastError }
     }
     elseif ($path -eq '/result') {
-      Send-Json $res 200 @{ text = $LastText; error = $LastError }
+      Send-Json $res 200 @{ text = $CurrentText; error = $LastError; running = $Running }
     }
     elseif ($path -eq '/stop') {
-      $finalText = $LastText
+      $finalText = $CurrentText
+      Stop-Recognition
       Send-Json $res 200 @{ text = $finalText; final = $true }
       break
     }
@@ -163,4 +198,5 @@ while ($listener.IsListening) {
 }
 
 if ($listener.IsListening) { $listener.Stop() }
+if ($null -ne $script:Recognizer) { try { $script:Recognizer.Dispose() } catch {} }
 exit 0

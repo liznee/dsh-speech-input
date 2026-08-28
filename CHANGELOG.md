@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.8] - 2026-08-27
+
+### Changed
+
+- Switch the Windows bridge to **continuous recognition**
+  (`ContinuousRecognitionSession`) so text accumulates as the user keeps
+  speaking, matching Win+H behavior. The `/start` handler is now non-blocking and
+  the client polls `/result` for accumulated text. This addresses cases where a
+  single-shot `RecognizeAsync` returned an empty result because it captured only
+  a short utterance.
+
 ## [0.1.7] - 2026-08-27
 
 ### Fixed
@@ -89,6 +100,7 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.1.8]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.8
 [0.1.7]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.7
 [0.1.6]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.6
 [0.1.5]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.5

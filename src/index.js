@@ -7,10 +7,10 @@
  *
  * The browser talks only to the same-origin DSH web server (127.0.0.1:3080) so
  * there is no cross-origin access to the bridge at 127.0.0.1:8765:
- *   POST /dsh-speech-input/bridge/recognize -> spawn bridge, run one
- *        recognition pass, return { text, error }
- *   POST /dsh-speech-input/bridge/stop      -> stop the bridge
- *   GET  /dsh-speech-input/bridge/status    -> status (+ bridge health/error)
+ *   POST /dsh-speech-input/bridge/start   -> spawn bridge + begin recognition
+ *   POST /dsh-speech-input/bridge/result  -> read accumulated text
+ *   POST /dsh-speech-input/bridge/stop    -> stop the bridge
+ *   GET  /dsh-speech-input/bridge/status  -> running status
  *
  * The bridge is spawned only when recognition is requested and exits on /stop or
  * after an idle timeout, so it never lingers in the background.
@@ -61,75 +61,59 @@ function sendJson(res, status, payload) {
   res.end(body)
 }
 
-/** Proxy one recognition pass to the bridge; returns { text, error }. */
-async function recognize() {
+/** Proxy a POST/GET to the bridge (same-origin host -> bridge loopback). */
+async function proxyToBridge(path, method = 'POST') {
   ensureBridge()
-  // Wait (bounded) for the bridge to accept a connection, then ask it to run a
-  // single recognition pass (POST /start blocks until one utterance is done).
   let lastError = null
   for (let i = 0; i < 30; i += 1) {
     try {
-      const start = await fetch(`${BRIDGE_BASE}/start`, { method: 'POST', cache: 'no-store' })
-      const body = await start.json()
-      return { text: typeof body.text === 'string' ? body.text : '', error: body.error ?? null }
+      const res = await fetch(`${BRIDGE_BASE}${path}`, { method, cache: 'no-store' })
+      const body = await res.json()
+      return body
     } catch (error) {
       lastError = String(error?.message ?? 'bridge not ready')
       await new Promise(resolve => setTimeout(resolve, 200))
     }
   }
-  return { text: '', error: lastError || 'bridge-unavailable' }
+  return { error: lastError || 'bridge-unavailable' }
+}
+
+function makeHandler(path, method = 'POST') {
+  return async (req, res) => {
+    if (method === 'POST' && req.method !== 'POST') {
+      sendJson(res, 405, { error: 'method_not_allowed' })
+      return
+    }
+    const body = await proxyToBridge(path, method)
+    sendJson(res, 200, body)
+  }
 }
 
 export async function apply(ctx) {
   await ctx.effect(async () => {
     const webServer = ctx.webServer
     const disposers = [
-      // POST /dsh-speech-input/bridge/recognize
       webServer.register({
         kind: 'exact',
-        path: '/dsh-speech-input/bridge/recognize',
-        async handler(req, res) {
-          if (req.method !== 'POST') {
-            sendJson(res, 405, { error: 'method_not_allowed' })
-            return
-          }
-          const result = await recognize()
-          sendJson(res, 200, result)
-        },
+        path: '/dsh-speech-input/bridge/start',
+        handler: makeHandler('/start', 'POST'),
       }),
-      // POST /dsh-speech-input/bridge/stop
+      webServer.register({
+        kind: 'exact',
+        path: '/dsh-speech-input/bridge/result',
+        handler: makeHandler('/result', 'POST'),
+      }),
       webServer.register({
         kind: 'exact',
         path: '/dsh-speech-input/bridge/stop',
-        handler(req, res) {
-          if (req.method !== 'POST') {
-            sendJson(res, 405, { error: 'method_not_allowed' })
-            return
-          }
-          stopBridge()
-          sendJson(res, 200, { stopped: true })
-        },
+        handler: makeHandler('/stop', 'POST'),
       }),
-      // GET /dsh-speech-input/bridge/status
       webServer.register({
         kind: 'exact',
         path: '/dsh-speech-input/bridge/status',
         handler(req, res) {
           const running = Boolean(bridgeChild && bridgeChild.exitCode === null)
           sendJson(res, 200, { running, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE })
-        },
-      }),
-      // Keep the legacy /bridge/start healthy for anyone still calling it.
-      webServer.register({
-        kind: 'exact',
-        path: '/dsh-speech-input/bridge/start',
-        handler(req, res) {
-          if (req.method !== 'POST') {
-            sendJson(res, 405, { error: 'method_not_allowed' })
-            return
-          }
-          ensureBridge()
-          sendJson(res, 200, { started: true, port: BRIDGE_PORT, baseUrl: BRIDGE_BASE })
         },
       }),
     ]
