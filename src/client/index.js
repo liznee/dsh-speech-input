@@ -229,7 +229,7 @@ function StopIcon() {
     key: bar.x,
     stroke: 'currentColor',
     strokeLinecap: 'round',
-    strokeWidth: 2,
+    strokeWidth: 1.5,
   })))
 }
 
