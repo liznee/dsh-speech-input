@@ -24,7 +24,6 @@
     "lib/**/*.map",
     "src/**/*.js",
     "scripts/build.mjs",
-    "docs/**/*.svg",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
