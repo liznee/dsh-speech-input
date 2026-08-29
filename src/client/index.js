@@ -353,8 +353,7 @@ export function SpeechInputButton({
     const onKeyDown = event => {
       if (event.defaultPrevented || event.isComposing) return
       if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
-      const target = event.target
-      if (typeof target?.closest === 'function' && target.closest('[data-composer-card]') === null) return
+      // 不限输入框内：点完麦克风后焦点在按钮上，任意位置的 Enter 都视为"停止听写"
       event.preventDefault()
       event.stopImmediatePropagation()
       controller.current?.stop()
