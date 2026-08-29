@@ -130,15 +130,16 @@ const STYLES = `
   transition: height 140ms ease-out, opacity 140ms linear;
   width: 4px;
 }
-/* 停止键五根音量条的呼吸动效：第 1 根鼓包吸气→缩回，然后第 2、3、4、5 根依次轮着鼓包 */
+/* 停止键五根音量条的呼吸动效：第 1 根→第 5 根依次轮着鼓包。
+   从中心向上下两端对称放大一点（不是缩小、也不是顶部截断），再回到静止大小。 */
 .dsh-speech-input-stop-bars path {
   animation: dsh-speech-input-bar-breathe .8s ease-in-out infinite;
   transform-box: fill-box;
-  transform-origin: center bottom;
+  transform-origin: center;
 }
 @keyframes dsh-speech-input-bar-breathe {
-  0%, 100% { opacity: .4; transform: scaleY(.6); }
-  50% { opacity: 1; transform: scaleY(1); }
+  0%, 100% { opacity: .8; transform: scaleY(1); }
+  50% { opacity: 1; transform: scaleY(1.1); }
 }
 .dsh-speech-input-stop-bars path:nth-child(1) { animation-delay: 0s; }
 .dsh-speech-input-stop-bars path:nth-child(2) { animation-delay: .8s; }
