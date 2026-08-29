@@ -130,21 +130,14 @@ const STYLES = `
   transition: height 140ms ease-out, opacity 140ms linear;
   width: 4px;
 }
-/* 停止键五根音量条的呼吸动效：从左到右逐个闪 */
-.dsh-speech-input-stop-bars path {
-  animation: dsh-speech-input-bar-pulse .8s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: center bottom;
+/* 停止键五根音量条的呼吸动效：整体一起鼓起来再收回去（同步缩放，缓慢） */
+.dsh-speech-input-stop-bars {
+  animation: dsh-speech-input-icon-breathe 1.4s ease-in-out infinite;
 }
-@keyframes dsh-speech-input-bar-pulse {
-  0%, 100% { opacity: .35; transform: scaleY(.55); }
-  50% { opacity: 1; transform: scaleY(1); }
+@keyframes dsh-speech-input-icon-breathe {
+  0%, 100% { opacity: .75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.16); }
 }
-.dsh-speech-input-stop-bars path:nth-child(1) { animation-delay: 0s; }
-.dsh-speech-input-stop-bars path:nth-child(2) { animation-delay: .1s; }
-.dsh-speech-input-stop-bars path:nth-child(3) { animation-delay: .2s; }
-.dsh-speech-input-stop-bars path:nth-child(4) { animation-delay: .3s; }
-.dsh-speech-input-stop-bars path:nth-child(5) { animation-delay: .4s; }
 .dsh-speech-input-status {
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
@@ -157,7 +150,7 @@ const STYLES = `
 @media (prefers-reduced-motion: reduce) {
   .dsh-speech-input-button { transition: none; }
   .dsh-speech-input-waveform > i { transition: none; }
-  .dsh-speech-input-stop-bars path { animation: none; }
+  .dsh-speech-input-stop-bars { animation: none; }
 }
 `
 
