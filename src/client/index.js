@@ -81,9 +81,9 @@ const STYLES = `
 }
 .dsh-speech-input-button[data-active='true'] {
   background: transparent;
-  border-color: var(--dsw-alias-label-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-label-primary) 48%, transparent);
   border-radius: 999px;
-  border-width: 1.5px;
+  border-width: 1px;
   color: var(--dsw-alias-label-primary);
 }
 .dsh-speech-input-button[data-error='true'] {
@@ -107,8 +107,8 @@ const STYLES = `
   gap: 1px;
   height: 30px;
   padding: 0;
-  /* 收窄胶囊，避免把左侧 +/权限 图标挤到第二行：整行保持一行 */
-  width: min(220px, 34vw);
+  /* 胶囊加长、波形撑满左右；普通窗口宽度下仍与左侧 +/权限 图标保持一行 */
+  width: min(280px, 40vw);
 }
 .dsh-speech-input-waveform {
   align-items: center;
@@ -118,7 +118,7 @@ const STYLES = `
   gap: 0;
   height: 30px;
   justify-content: space-between;
-  min-width: 48px;
+  min-width: 40px;
   padding: 0 2px;
 }
 .dsh-speech-input-waveform > i {
@@ -130,6 +130,21 @@ const STYLES = `
   transition: height 140ms ease-out, opacity 140ms linear;
   width: 4px;
 }
+/* 停止键五根音量条的呼吸动效：从左到右逐个闪 */
+.dsh-speech-input-stop-bars path {
+  animation: dsh-speech-input-bar-pulse .8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+@keyframes dsh-speech-input-bar-pulse {
+  0%, 100% { opacity: .35; transform: scaleY(.55); }
+  50% { opacity: 1; transform: scaleY(1); }
+}
+.dsh-speech-input-stop-bars path:nth-child(1) { animation-delay: 0s; }
+.dsh-speech-input-stop-bars path:nth-child(2) { animation-delay: .1s; }
+.dsh-speech-input-stop-bars path:nth-child(3) { animation-delay: .2s; }
+.dsh-speech-input-stop-bars path:nth-child(4) { animation-delay: .3s; }
+.dsh-speech-input-stop-bars path:nth-child(5) { animation-delay: .4s; }
 .dsh-speech-input-status {
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
@@ -142,6 +157,7 @@ const STYLES = `
 @media (prefers-reduced-motion: reduce) {
   .dsh-speech-input-button { transition: none; }
   .dsh-speech-input-waveform > i { transition: none; }
+  .dsh-speech-input-stop-bars path { animation: none; }
 }
 `
 
@@ -202,6 +218,7 @@ function StopIcon() {
   ]
   return React.createElement('svg', {
     'aria-hidden': true,
+    className: 'dsh-speech-input-stop-bars',
     fill: 'none',
     height: 26,
     viewBox: '0 0 24 24',
