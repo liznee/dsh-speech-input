@@ -1,5 +1,8 @@
 # dsh-speech-input
 
+[![npm](https://img.shields.io/npm/v/dsh-speech-input)](https://www.npmjs.com/package/dsh-speech-input)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 [中文](#中文) | [English](#english)
 
 ## 中文
