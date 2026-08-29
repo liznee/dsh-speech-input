@@ -64,8 +64,14 @@
     "web-speech-api"
   ],
   "devDependencies": {
+<<<<<<< HEAD
     "esbuild": "^0.25.0",
     "react": "^19.2.8",
     "react-test-renderer": "^18.2.0"
+=======
+    "esbuild": "^0.28.2",
+    "react": "^19.2.8",
+    "react-test-renderer": "^19.2.8"
+>>>>>>> 6dedd84 (chore: apply dependency updates react19/esbuild0.28/test-renderer19 + actions v7; add CI badge)
   }
 }

@@ -1,5 +1,6 @@
 # dsh-speech-input
 
+[![CI](https://github.com/liznee/dsh-speech-input/actions/workflows/ci.yml/badge.svg)](https://github.com/liznee/dsh-speech-input/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/dsh-speech-input)](https://www.npmjs.com/package/dsh-speech-input)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
