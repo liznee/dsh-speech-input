@@ -9,6 +9,8 @@
 
 `dsh-speech-input` 为 DeepSeek Harness Web 输入框增加一个原生麦克风按钮。点击开始听写，识别结果实时写入当前草稿；再次点击停止并补全句末标点。插件不会自动发送消息。
 <img width="780" height="94" alt="image" src="https://github.com/user-attachments/assets/ac39ddba-d1e7-43aa-a734-39deac6d8c43" />
+<img width="780" height="94" alt="image" src="https://github.com/user-attachments/assets/5ecf5d70-19d6-4dcf-8e4f-24145cdaf7d4" />
+
 
 
 ### 特性
