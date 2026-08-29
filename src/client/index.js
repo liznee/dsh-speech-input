@@ -104,10 +104,11 @@ const STYLES = `
   box-shadow: 0 0 0 1.5px rgba(127, 127, 127, .38), 0 2px 8px rgba(0, 0, 0, .20);
   display: inline-flex;
   flex: none;
-  gap: 2px;
+  gap: 1px;
   height: 30px;
   padding: 0;
-  width: min(320px, 42vw);
+  /* 收窄胶囊，避免把左侧 +/权限 图标挤到第二行：整行保持一行 */
+  width: min(220px, 34vw);
 }
 .dsh-speech-input-waveform {
   align-items: center;
@@ -117,8 +118,8 @@ const STYLES = `
   gap: 0;
   height: 30px;
   justify-content: space-between;
-  min-width: 72px;
-  padding: 0 3px;
+  min-width: 48px;
+  padding: 0 2px;
 }
 .dsh-speech-input-waveform > i {
   background: currentColor;
