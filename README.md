@@ -12,7 +12,7 @@
 - 支持 Chrome / Edge 的 Web Speech API，中英文跟随浏览器语言
 - 中间识别结果原位更新，不会反复叠加同一句话
 - 听写期间在识别文字后手工补写的内容会保留
-- 无语音、停顿或浏览器结束单次识别时会持续自动续听，只有再次点击停止按钮才结束
+- 无语音、停顿或浏览器结束单次识别时会持续自动续听；持续 5 秒没有检测到说话会自动停止（断开）并保留已听写文字。时长可在 `src/client/index.js` 的 `DEFAULT_SILENCE_TIMEOUT_MS` 调整，设为 `0` 可关闭自动停止
 - 听写中显示“灰色圆形取消 ×｜铺满可用宽度的实时音量条｜方块停止”，采用 Codex 风格，不使用红色录音状态
 - 音量条通过 Web Audio API 在本地计算麦克风 RMS 音量，展示最近 24 个真实音量样本，不使用循环假动画
 - 听写期间 Harness 的发送按钮和 Enter 发送会由官方接口置灰禁用；停止或取消后恢复
@@ -21,6 +21,13 @@
 - 页面切换或插件卸载时中止识别并释放麦克风
 - 支持键盘焦点、屏幕阅读器状态播报和减少动态效果偏好
 - 纯浏览器插件，不需要额外 API key、服务端或模型下载
+
+### 更新日志
+
+- **v0.2.1（2026-08-29）**：静音自动停止默认改为 5 秒；听写胶囊重做——椭圆描边+阴影、端头曲率与圆形按钮一致、线条加粗更清晰；停止按钮改为"五根音量条"图标；取消与停止改为对称描边圆钮。
+- **v0.2.0（2026-08-27）**：新增静音自动停止——持续不说话会自动结束并保留已听写文字，只按真实语音（文本变化或本地麦克风音量）续时。
+
+完整历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 ### 安装
 
@@ -67,7 +74,7 @@ dsh plugin --profile web add ./dsh-speech-input-0.1.0.tgz
 
 `dsh-speech-input` adds a native microphone control to the DeepSeek Harness Web composer. Click once to dictate into the current draft and again to stop. It never submits the message automatically.
 
-It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows a gray circular cancel control, a full-width 24-segment meter driven by locally measured microphone RMS, and a square stop control; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition and local metering tracks on teardown, and includes reduced-motion and screen-reader behavior.
+It uses the public `conversation.input.right`, `inputActions.setDraft()`, and composer-block APIs. While listening it shows a gray circular cancel control, a full-width 24-segment meter driven by locally measured microphone RMS, and a square stop control; the host send action is disabled. Cancel removes the current dictation while preserving the pre-existing draft and recognizable manual suffix edits. It also supports interim-result replacement, reports permission and network failures, releases recognition and local metering tracks on teardown, and includes reduced-motion and screen-reader behavior. After 5 seconds without detected speech it auto-stops (like a manual stop, keeping the dictation and showing a brief notice); tune `DEFAULT_SILENCE_TIMEOUT_MS` in `src/client/index.js`, or set it to `0` to disable auto-stop.
 
 Install directly from GitHub:
 
@@ -84,6 +91,10 @@ dsh plugin --profile web add dsh-speech-input
 ```
 
 The plugin uses the browser Web Speech API. Edge and Chrome commonly send microphone audio to the browser vendor's online speech service. The plugin does not store audio or send it to Harness/DeepSeek, but it is not an offline recognizer.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full history. v0.2.1 reworked the listening pill (oval ring + shadow, end-cap curvature matching the circular buttons, thicker strokes, a five-bar volume stop icon, symmetric outlined cancel/stop buttons), removed the waveform baseline, and lowered the default silence timeout to 5 seconds; v0.2.0 introduced auto-stop on silence.
 
 ## Development
 

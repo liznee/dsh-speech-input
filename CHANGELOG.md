@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.1] - 2026-08-29
+
+### Changed
+
+- **Silence timeout default 15s → 5s**: auto-stop now kicks in after 5 seconds
+  without detected speech (`DEFAULT_SILENCE_TIMEOUT_MS`).
+- **Listening capsule rework**: the cancel–waveform–stop bar is framed as an
+  oval pill with a subtle ring and shadow. End-cap curvature now exactly matches
+  the circular buttons (border-box sizing), so the pill reads as a circle cut
+  and stretched in the middle.
+- **Crisper strokes**: the outer ring, waveform bars (2 px → 4 px, primary
+  color), and icons were thickened so nothing looks pixelated.
+- **New stop icon**: the stop control shows five vertical volume bars
+  (low–high–low) with rounded caps inside the outlined circle; cancel and stop
+  are now symmetric outlined circles.
+- Removed the thin baseline under the waveform.
+
+## [0.2.0] - 2026-08-27
+
+### Added
+
+- **Auto-stop on silence**: after 15 seconds without detected speech the
+  recording stops automatically (like a manual stop — the dictation is kept,
+  punctuation is applied, and the microphone is released), with a brief
+  "auto-stopped" notice on the button. The silence deadline is anchored to the
+  last **real** speech: only brand-new transcript text or actual microphone
+  voice activity (local RMS ≥ `VOICE_ACTIVITY_THRESHOLD`) extends it — ambient
+  noise (`onspeechstart`), identical re-emitted results, and silent browser
+  session restarts never do. Tune `DEFAULT_SILENCE_TIMEOUT_MS` in
+  `src/client/index.js`, or set it to `0` to disable. The controller accepts
+  `silenceTimeoutMs` and an injected `now()` clock for testability.
+
 ## [0.1.9] - 2026-08-27
 
 ### Fixed
@@ -113,6 +145,8 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.2.1]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.2.1
+[0.2.0]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.2.0
 [0.1.9]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.9
 [0.1.8]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.8
 [0.1.7]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.7

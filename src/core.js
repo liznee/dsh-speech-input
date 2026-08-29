@@ -111,6 +111,10 @@ export class VoiceRecognitionController {
     this.roundFinal = ''
     this.roundInterim = ''
     this.silentEnds = 0
+    this.lastSpeechAt = 0
+    this.lastRoundText = ''
+    this.silenceTimer = null
+    this.silenceTimerId = 0
   }
 
   start() {
@@ -123,12 +127,15 @@ export class VoiceRecognitionController {
     this.roundFinal = ''
     this.roundInterim = ''
     this.silentEnds = 0
+    this.lastSpeechAt = this.timeNow()
+    this.lastRoundText = ''
     this.options.onState({ phase: 'starting' })
     return this.openRecognition(this.generation)
   }
 
-  stop() {
+  stop(reason) {
     if (!this.active) return false
+    this.clearSilenceTimer()
     this.active = false
     this.generation += 1
     const recognition = this.recognition
@@ -137,12 +144,13 @@ export class VoiceRecognitionController {
       try { recognition.stop() } catch {}
     }
     this.finishDraft()
-    this.options.onState({ phase: 'idle' })
+    this.options.onState(reason ? { phase: 'idle', reason } : { phase: 'idle' })
     return true
   }
 
   cancel() {
     if (!this.active) return false
+    this.clearSilenceTimer()
     this.active = false
     this.generation += 1
     const recognition = this.recognition
@@ -159,6 +167,7 @@ export class VoiceRecognitionController {
 
   destroy() {
     if (this.destroyed) return
+    this.clearSilenceTimer()
     this.destroyed = true
     this.active = false
     this.generation += 1
@@ -167,6 +176,47 @@ export class VoiceRecognitionController {
     if (recognition !== null) {
       try { recognition.abort() } catch {}
     }
+  }
+
+  timeNow() {
+    return typeof this.options.now === 'function' ? this.options.now() : Date.now()
+  }
+
+  clearSilenceTimer() {
+    this.silenceTimerId += 1
+    const timer = this.silenceTimer
+    this.silenceTimer = null
+    if (timer !== null && timer !== undefined) {
+      try { clearTimeout(timer) } catch {}
+    }
+  }
+
+  /**
+   * Auto-stop the recording after `silenceTimeoutMs` without detected speech.
+   * The deadline is anchored to `lastSpeechAt`, so the browser silently ending
+   * and restarting recognition sessions never extends the timeout.
+   */
+  armIdleTimer() {
+    const timeout = this.options.silenceTimeoutMs
+    if (!this.active || this.destroyed || !timeout || timeout <= 0) return
+    this.clearSilenceTimer()
+    const id = this.silenceTimerId
+    const remaining = this.lastSpeechAt + timeout - this.timeNow()
+    if (remaining <= 0) {
+      this.stop('silence')
+      return
+    }
+    const schedule = this.options.schedule ?? ((callback, wait) => setTimeout(callback, wait))
+    this.silenceTimer = schedule(() => {
+      if (id !== this.silenceTimerId) return
+      this.silenceTimer = null
+      this.armIdleTimer()
+    }, remaining)
+  }
+
+  markSpeech() {
+    this.lastSpeechAt = this.timeNow()
+    this.armIdleTimer()
   }
 
   openRecognition(generation) {
@@ -192,16 +242,21 @@ export class VoiceRecognitionController {
     recognition.interimResults = true
     recognition.onstart = () => {
       if (this.active && generation === this.generation) {
+        this.armIdleTimer()
         this.options.onState({ phase: 'listening', speaking: false })
       }
     }
     recognition.onspeechstart = () => {
       if (this.active && generation === this.generation) {
+        // Audio energy alone (ambient noise, fans, re-opened sessions) is not
+        // speech; only real transcript changes or microphone voice activity
+        // may extend the silence deadline.
         this.options.onState({ phase: 'listening', speaking: true })
       }
     }
     recognition.onspeechend = () => {
       if (this.active && generation === this.generation) {
+        this.armIdleTimer()
         this.options.onState({ phase: 'listening', speaking: false })
       }
     }
@@ -212,7 +267,16 @@ export class VoiceRecognitionController {
       this.roundInterim = interimText
       const round = joinSpeech(finalText, interimText)
       this.updateDraft(joinSpeech(this.committedRounds, round))
-      if (round) this.silentEnds = 0
+      if (round && round !== this.lastRoundText) {
+        // Real new transcript text: extend the silence deadline. The browser
+        // re-emits identical results (interim re-renders, stale finals) and
+        // those must not keep resetting the clock.
+        this.lastRoundText = round
+        this.silentEnds = 0
+        this.markSpeech()
+      } else {
+        this.armIdleTimer()
+      }
     }
     recognition.onerror = event => {
       if (!this.active || generation !== this.generation) return
@@ -233,8 +297,15 @@ export class VoiceRecognitionController {
       if (round) {
         this.committedRounds = joinSpeech(this.committedRounds, round)
         this.silentEnds = 0
+        if (round !== this.lastRoundText) {
+          this.lastRoundText = round
+          this.markSpeech()
+        } else {
+          this.armIdleTimer()
+        }
       } else {
         this.silentEnds += 1
+        this.armIdleTimer()
       }
 
       const restartGeneration = this.generation

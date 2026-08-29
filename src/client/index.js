@@ -3,7 +3,14 @@ import { createBrowserMicrophoneLevelMeter } from '../audio-level.js'
 import { VoiceRecognitionController } from '../core.js'
 
 const NS = 'speech-input'
-const WAVEFORM_SEGMENTS = 24
+const WAVEFORM_SEGMENTS = 16
+
+/** How long to keep listening without detected speech before auto-stopping. */
+export const DEFAULT_SILENCE_TIMEOUT_MS = 5_000
+/** How long the "auto-stopped" notice stays visible on the button. */
+export const SILENCE_NOTICE_MS = 2_600
+/** Microphone RMS above this counts as voice activity for the silence clock. */
+export const VOICE_ACTIVITY_THRESHOLD = 0.04
 
 function emptyWaveform() {
   return Array.from({ length: WAVEFORM_SEGMENTS }, () => 0)
@@ -23,6 +30,7 @@ export const zh = {
   network: '语音识别网络连接失败，请稍后重试',
   'recognition-failed': '语音识别失败，请重试',
   'start-failed': '麦克风启动失败，请稍后重试',
+  'auto-stopped': '已自动停止（静音超时）',
 }
 
 export const en = {
@@ -39,6 +47,7 @@ export const en = {
   network: 'Speech recognition could not reach its service; try again later',
   'recognition-failed': 'Speech recognition failed; try again',
   'start-failed': 'The microphone could not start; try again',
+  'auto-stopped': 'Stopped automatically (silence)',
 }
 
 const STYLES = `
@@ -47,6 +56,7 @@ const STYLES = `
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
+  box-sizing: border-box;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   display: inline-flex;
@@ -70,32 +80,38 @@ const STYLES = `
   opacity: .45;
 }
 .dsh-speech-input-button[data-active='true'] {
-  background: var(--dsw-alias-label-primary);
+  background: transparent;
   border-color: var(--dsw-alias-label-primary);
   border-radius: 999px;
-  color: var(--dsw-alias-bg-layer-1);
+  border-width: 1.5px;
+  color: var(--dsw-alias-label-primary);
 }
 .dsh-speech-input-button[data-error='true'] {
   color: var(--dsw-alias-state-warn-primary);
 }
 .dsh-speech-input-cancel {
-  background: rgba(127, 127, 127, .20);
-  border-color: transparent;
+  border: 1.5px solid rgba(127, 127, 127, .45);
   border-radius: 999px;
 }
 .dsh-speech-input-cancel:hover:not(:disabled) {
-  background: rgba(127, 127, 127, .30);
+  background: rgba(127, 127, 127, .18);
+  border-color: rgba(127, 127, 127, .65);
 }
 .dsh-speech-input-active {
   align-items: center;
+  background: var(--dsw-alias-bg-layer-2, rgba(127, 127, 127, .14));
+  border-radius: 999px;
+  box-shadow: 0 0 0 1.5px rgba(127, 127, 127, .38), 0 2px 8px rgba(0, 0, 0, .20);
   display: inline-flex;
   flex: none;
-  gap: 3px;
+  gap: 2px;
+  height: 30px;
+  padding: 0;
   width: min(320px, 42vw);
 }
 .dsh-speech-input-waveform {
   align-items: center;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-primary);
   display: inline-flex;
   flex: 1 1 auto;
   gap: 0;
@@ -103,26 +119,15 @@ const STYLES = `
   justify-content: space-between;
   min-width: 72px;
   padding: 0 3px;
-  position: relative;
-}
-.dsh-speech-input-waveform::after {
-  background: currentColor;
-  bottom: 1px;
-  content: '';
-  height: 1px;
-  left: 3px;
-  opacity: .55;
-  position: absolute;
-  right: 3px;
 }
 .dsh-speech-input-waveform > i {
   background: currentColor;
   border-radius: 999px;
   display: block;
   flex: none;
-  min-height: 2px;
+  min-height: 4px;
   transition: height 140ms ease-out, opacity 140ms linear;
-  width: 2px;
+  width: 4px;
 }
 .dsh-speech-input-status {
   clip: rect(0 0 0 0);
@@ -175,32 +180,38 @@ function MicrophoneIcon() {
     stroke: 'currentColor',
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
-    strokeWidth: 2,
+    strokeWidth: 2.5,
   }),
   React.createElement('path', {
     d: 'M19 10v2a7 7 0 0 1-14 0v-2M12 19v3',
     stroke: 'currentColor',
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
-    strokeWidth: 2,
+    strokeWidth: 2.5,
   }))
 }
 
 function StopIcon() {
+  const bars = [
+    { x: 4, top: 15, bottom: 9 },
+    { x: 8, top: 17.5, bottom: 6.5 },
+    { x: 12, top: 19.5, bottom: 4.5 },
+    { x: 16, top: 17.5, bottom: 6.5 },
+    { x: 20, top: 15, bottom: 9 },
+  ]
   return React.createElement('svg', {
     'aria-hidden': true,
     fill: 'none',
-    height: 16,
+    height: 26,
     viewBox: '0 0 24 24',
-    width: 16,
-  }, React.createElement('rect', {
-    fill: 'currentColor',
-    height: 9,
-    rx: 1.5,
-    width: 9,
-    x: 7.5,
-    y: 7.5,
-  }))
+    width: 26,
+  }, ...bars.map(bar => React.createElement('path', {
+    d: `M${bar.x} ${bar.bottom}V${bar.top}`,
+    key: bar.x,
+    stroke: 'currentColor',
+    strokeLinecap: 'round',
+    strokeWidth: 2,
+  })))
 }
 
 function CancelIcon() {
@@ -214,7 +225,7 @@ function CancelIcon() {
     d: 'm7 7 10 10M17 7 7 17',
     stroke: 'currentColor',
     strokeLinecap: 'round',
-    strokeWidth: 2,
+    strokeWidth: 3,
   }))
 }
 
@@ -230,14 +241,37 @@ export function SpeechInputButton({
   const mounted = React.useRef(true)
   const [voice, setVoice] = React.useState({ phase: 'idle' })
   const [waveformLevels, setWaveformLevels] = React.useState(emptyWaveform)
+  const [silenceNotice, setSilenceNotice] = React.useState(false)
   const controller = React.useRef(null)
   const levelMeter = React.useRef(null)
+  const noticeTimer = React.useRef(null)
   const supported = speechConstructor() !== null
   const busy = input?.phase !== 'plain'
+
+  const clearNoticeTimer = React.useCallback(() => {
+    if (noticeTimer.current === null) return
+    clearTimeout(noticeTimer.current)
+    noticeTimer.current = null
+  }, [])
+
+  const handleState = React.useCallback(state => {
+    setVoice(state)
+    if (state.phase === 'idle' && state.reason === 'silence') {
+      clearNoticeTimer()
+      setSilenceNotice(true)
+      noticeTimer.current = setTimeout(() => {
+        noticeTimer.current = null
+        if (mounted.current) setSilenceNotice(false)
+      }, SILENCE_NOTICE_MS)
+    }
+  }, [clearNoticeTimer])
 
   const recordLevel = React.useCallback(value => {
     if (!mounted.current) return
     const level = Math.max(0, Math.min(1, Number(value) || 0))
+    // Acoustic voice activity (local microphone RMS) extends the silence
+    // deadline even before the browser's speech service returns a transcript.
+    if (level >= VOICE_ACTIVITY_THRESHOLD) controller.current?.markSpeech()
     setWaveformLevels(previous => [...previous.slice(1), level])
   }, [])
 
@@ -257,20 +291,22 @@ export function SpeechInputButton({
       setDraft: value => {
         if (live.current.input?.phase === 'plain') live.current.inputActions?.setDraft(value)
       },
-      onState: setVoice,
+      onState: handleState,
       language: recognitionLanguage,
       punctuation: () => 'smart',
+      silenceTimeoutMs: DEFAULT_SILENCE_TIMEOUT_MS,
     })
     return controller.current
-  }, [])
+  }, [handleState])
 
   React.useEffect(() => () => {
     mounted.current = false
+    clearNoticeTimer()
     controller.current?.destroy()
     controller.current = null
     if (levelMeter.current !== false) levelMeter.current?.stop()
     levelMeter.current = null
-  }, [])
+  }, [clearNoticeTimer])
 
   React.useEffect(() => {
     if (busy) controller.current?.stop()
@@ -283,6 +319,7 @@ export function SpeechInputButton({
   else if (busy) label = t('busy')
   else if (voice.phase === 'starting') label = t('starting')
   else if (voice.phase === 'listening') label = t('stop')
+  else if (silenceNotice) label = t('auto-stopped')
   else if (error) label = t(voice.reason ?? 'recognition-failed')
 
   React.useEffect(() => {
@@ -299,6 +336,8 @@ export function SpeechInputButton({
   }, [active])
 
   const toggle = () => {
+    clearNoticeTimer()
+    setSilenceNotice(false)
     const instance = ensureController()
     if (active) instance.stop()
     else if (instance.start()) void ensureMeter()?.start()
@@ -329,8 +368,8 @@ export function SpeechInputButton({
           'aria-hidden': true,
           key: index,
           style: {
-            height: `${2 + Math.round(level * 28)}px`,
-            opacity: 0.4 + level * 0.6,
+            height: `${4 + Math.round(level * 23)}px`,
+            opacity: 0.45 + level * 0.55,
           },
         }))),
         React.createElement('button', {
