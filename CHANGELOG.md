@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.3] - 2026-08-29
+
+### Added
+
+- **Enter stops dictation**: while listening, pressing Enter in the composer
+  immediately stops the microphone and keeps the dictation (punctuation
+  applied); press Enter again to send. No more hunting for the stop button.
+
+### Changed
+
+- The stop control's five volume bars breathe one at a time, expanding
+  symmetrically from the center (rest → slightly larger → rest).
+
 ## [0.2.1] - 2026-08-29
 
 ### Changed
@@ -145,6 +158,7 @@ All notable changes to this project are documented in this file.
 - Live local RMS microphone meter with a 24-segment waveform history.
 - Chinese and English interface copy, tests, and release documentation.
 
+[0.2.3]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.2.3
 [0.2.1]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.2.1
 [0.2.0]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.2.0
 [0.1.9]: https://github.com/liznee/dsh-speech-input/releases/tag/v0.1.9

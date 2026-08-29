@@ -347,6 +347,22 @@ export function SpeechInputButton({
     return () => { setComposerBlocked(undefined) }
   }, [active, setComposerBlocked, t])
 
+  // 听写中按 Enter：立即停止录音并保留草稿（补标点），而不是只能点停止按钮。
+  React.useEffect(() => {
+    if (!active || typeof document === 'undefined') return undefined
+    const onKeyDown = event => {
+      if (event.defaultPrevented || event.isComposing) return
+      if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
+      const target = event.target
+      if (typeof target?.closest === 'function' && target.closest('[data-composer-card]') === null) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      controller.current?.stop()
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => { document.removeEventListener('keydown', onKeyDown, true) }
+  }, [active])
+
   React.useEffect(() => {
     if (active || levelMeter.current === null) return
     if (levelMeter.current !== false) levelMeter.current.stop()

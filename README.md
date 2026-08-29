@@ -20,6 +20,7 @@
 - 中间识别结果原位更新，不会反复叠加同一句话
 - 听写期间在识别文字后手工补写的内容会保留
 - 无语音、停顿或浏览器结束单次识别时会持续自动续听；持续 5 秒没有检测到说话会自动停止（断开）并保留已听写文字。时长可在 `src/client/index.js` 的 `DEFAULT_SILENCE_TIMEOUT_MS` 调整，设为 `0` 可关闭自动停止
+- 听写中按 Enter 立即停止并保留已听写文字（补好句末标点），再按一次 Enter 即可发送
 - 听写中显示“灰色圆形取消 ×｜铺满可用宽度的实时音量条｜方块停止”，采用 Codex 风格，不使用红色录音状态
 - 音量条通过 Web Audio API 在本地计算麦克风 RMS 音量，展示最近 24 个真实音量样本，不使用循环假动画
 - 听写期间 Harness 的发送按钮和 Enter 发送会由官方接口置灰禁用；停止或取消后恢复
@@ -97,7 +98,7 @@ Published on npm; install directly with:
 dsh plugin --profile web add dsh-speech-input
 ```
 
-The plugin uses the browser Web Speech API. Edge and Chrome commonly send microphone audio to the browser vendor's online speech service. The plugin does not store audio or send it to Harness/DeepSeek, but it is not an offline recognizer.
+The plugin uses the browser Web Speech API. Edge and Chrome commonly send microphone audio to the browser vendor's online speech service. The plugin does not store audio or send it to Harness/DeepSeek, but it is not an offline recognizer. Press Enter while listening to stop immediately and keep the dictation; press Enter again to send.
 
 ## Changelog
 
